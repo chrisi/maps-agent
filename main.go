@@ -2,15 +2,70 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins for simplicity, match existing CORS policy
+	},
+}
+
+type Hub struct {
+	clients    map[*websocket.Conn]bool
+	broadcast  chan []byte
+	register   chan *websocket.Conn
+	unregister chan *websocket.Conn
+	mu         sync.Mutex
+}
+
+func newHub() *Hub {
+	return &Hub{
+		clients:    make(map[*websocket.Conn]bool),
+		broadcast:  make(chan []byte),
+		register:   make(chan *websocket.Conn),
+		unregister: make(chan *websocket.Conn),
+	}
+}
+
+func (h *Hub) run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.mu.Lock()
+			h.clients[client] = true
+			h.mu.Unlock()
+		case client := <-h.unregister:
+			h.mu.Lock()
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				client.Close()
+			}
+			h.mu.Unlock()
+		case message := <-h.broadcast:
+			h.mu.Lock()
+			for client := range h.clients {
+				err := client.WriteMessage(websocket.TextMessage, message)
+				if err != nil {
+					log.Printf("error: %v", err)
+					client.Close()
+					delete(h.clients, client)
+				}
+			}
+			h.mu.Unlock()
+		}
+	}
+}
 
 func main() {
 	defaultPath := `C:\Progam Files\Falcon BMS 4.38`
@@ -19,6 +74,53 @@ func main() {
 	callsign := flag.String("callsign", defaultCallsign, "Callsign")
 	addr := flag.String("addr", ":8080", "HTTP service address")
 	flag.Parse()
+
+	fullPath := filepath.Join(*configPath, `User\Config`, *callsign+".ini")
+
+	hub := newHub()
+	go hub.run()
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	go func() {
+		var (
+			debounceTimer *time.Timer
+			mu            sync.Mutex
+		)
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Has(fsnotify.Write) && filepath.Base(event.Name) == filepath.Base(fullPath) {
+					mu.Lock()
+					if debounceTimer != nil {
+						debounceTimer.Stop()
+					}
+					debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
+						log.Printf("broadcasting update for: %s", fullPath)
+						hub.broadcast <- []byte("update")
+					})
+					mu.Unlock()
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Printf("watcher error: %v", err)
+			}
+		}
+	}()
+
+	err = watcher.Add(filepath.Dir(fullPath))
+	if err != nil {
+		log.Printf("Warning: Failed to add watcher for %s: %v", filepath.Dir(fullPath), err)
+	}
 
 	r := gin.Default()
 
@@ -29,10 +131,6 @@ func main() {
 	}))
 
 	r.GET("/ini", func(c *gin.Context) {
-		fullPath := filepath.Join(*configPath, `User\Config`, *callsign+".ini")
-
-		fmt.Println(fullPath)
-
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 			c.String(http.StatusNotFound, fullPath+" not found")
 			return
@@ -43,6 +141,25 @@ func main() {
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
 		c.File(fullPath)
+	})
+
+	r.GET("/ws", func(c *gin.Context) {
+		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			log.Printf("Upgrade error: %v", err)
+			return
+		}
+		hub.register <- conn
+		defer func() {
+			hub.unregister <- conn
+		}()
+
+		for {
+			_, _, err := conn.ReadMessage()
+			if err != nil {
+				break
+			}
+		}
 	})
 
 	log.Printf("Starting server on %s", *addr)
