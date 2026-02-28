@@ -86,6 +86,14 @@ func main() {
 	}
 	defer watcher.Close()
 
+	smr := SharedMemReader{}
+	err = smr.open()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer smr.close()
+
 	go func() {
 		var (
 			debounceTimer *time.Timer
@@ -129,6 +137,16 @@ func main() {
 		AllowMethods:    []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowHeaders:    []string{"Origin", "Content-Length", "Content-Type"},
 	}))
+
+	r.GET("/pos", func(c *gin.Context) {
+		read, err2 := smr.read()
+
+		if err2 != nil {
+			c.String(http.StatusInternalServerError, err2.Error())
+			return
+		}
+		c.JSON(http.StatusOK, read)
+	})
 
 	r.GET("/ini", func(c *gin.Context) {
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
