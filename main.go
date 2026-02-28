@@ -22,6 +22,11 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type AgentMessage struct {
+	Type    string      `json:"type"`
+	Version int         `json:"version,omitempty"`
+	Payload interface{} `json:"payload,omitempty"`
+}
 type Hub struct {
 	clients    map[*websocket.Conn]bool
 	broadcast  chan []byte
@@ -113,7 +118,19 @@ func main() {
 					}
 					debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
 						log.Printf("broadcasting update for: %s", fullPath)
-						hub.broadcast <- []byte("update")
+						msg := AgentMessage{
+							Type: "update",
+						}
+						if err != nil {
+							log.Printf("Error reading shared memory: %v", err)
+							return
+						}
+						data, err := json.Marshal(msg)
+						if err != nil {
+							log.Printf("Error marshaling ship data: %v", err)
+							return
+						}
+						hub.broadcast <- data
 					})
 					mu.Unlock()
 				}
@@ -142,7 +159,13 @@ func main() {
 					log.Printf("Error reading shared memory: %v", err)
 					continue
 				}
-				data, err := json.Marshal(ship)
+
+				msg := AgentMessage{
+					Type:    "pos",
+					Payload: &ship,
+				}
+
+				data, err := json.Marshal(msg)
 				if err != nil {
 					log.Printf("Error marshaling ship data: %v", err)
 					continue
