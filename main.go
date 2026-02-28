@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
@@ -129,6 +130,27 @@ func main() {
 	if err != nil {
 		log.Printf("Warning: Failed to add watcher for %s: %v", filepath.Dir(fullPath), err)
 	}
+
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				ship, err := smr.read()
+				if err != nil {
+					log.Printf("Error reading shared memory: %v", err)
+					continue
+				}
+				data, err := json.Marshal(ship)
+				if err != nil {
+					log.Printf("Error marshaling ship data: %v", err)
+					continue
+				}
+				hub.broadcast <- data
+			}
+		}
+	}()
 
 	r := gin.Default()
 
