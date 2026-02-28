@@ -154,7 +154,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				ship, err := smr.read()
+				ship := smr.getOwnShip()
 				if err != nil {
 					log.Printf("Error reading shared memory: %v", err)
 					continue
@@ -184,12 +184,7 @@ func main() {
 	}))
 
 	r.GET("/pos", func(c *gin.Context) {
-		read, err2 := smr.read()
-
-		if err2 != nil {
-			c.String(http.StatusInternalServerError, err2.Error())
-			return
-		}
+		read := smr.getOwnShip()
 		c.JSON(http.StatusOK, read)
 	})
 

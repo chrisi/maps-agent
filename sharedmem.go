@@ -31,7 +31,9 @@ var (
 )
 
 type SharedMemReader struct {
-	hMap windows.Handle
+	hMap    windows.Handle
+	fd1Addr uintptr
+	fd1     *C.FlightData
 }
 
 func (r *SharedMemReader) openFileMappingRead(name string) (windows.Handle, error) {
@@ -90,23 +92,26 @@ func (r *SharedMemReader) open() error {
 		return err
 	}
 	r.hMap = hnd
+	r.fd1Addr, err = r.mapViewRead(r.hMap)
+	if err != nil {
+		return err
+	}
+	r.fd1 = (*C.FlightData)(unsafe.Pointer(r.fd1Addr))
 	return nil
 }
 
 func (r *SharedMemReader) close() {
-	windows.CloseHandle(r.hMap)
+	_ = r.unmapView(r.fd1Addr)
+	_ = windows.CloseHandle(r.hMap)
 }
 
-func (r *SharedMemReader) read() (*OwnShip, error) {
-	addr, err := r.mapViewRead(r.hMap)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = r.unmapView(addr) }()
-	fd := (*C.FlightData)(unsafe.Pointer(addr))
-	x := float32(fd.y) // North (ft)
-	y := float32(fd.x) // East  (ft)
-	z := float32(fd.z) // Down  (ft)
-	p := OwnShip{x, y, z}
-	return &p, nil
+func (r *SharedMemReader) getOwnShip() *OwnShip {
+	x := float32(r.fd1.y) // North (ft)
+	y := float32(r.fd1.x) // East (ft)
+	z := float32(r.fd1.z) // Down (ft)
+	return &OwnShip{x, y, z}
+}
+
+func (r *SharedMemReader) isFlying() bool {
+	return r.fd1.hsiBits|0x80000000 > 0
 }
