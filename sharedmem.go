@@ -104,8 +104,8 @@ func (r *SharedMemReader) read() (*OwnShip, error) {
 	}
 	defer func() { _ = r.unmapView(addr) }()
 	fd := (*C.FlightData)(unsafe.Pointer(addr))
-	x := float32(fd.x) // North (ft)
-	y := float32(fd.y) // East  (ft)
+	x := float32(fd.y) // North (ft)
+	y := float32(fd.x) // East  (ft)
 	z := float32(fd.z) // Down  (ft)
 	p := OwnShip{x, y, z}
 	return &p, nil
