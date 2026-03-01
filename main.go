@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -21,8 +22,13 @@ func main() {
 	defaultCallsign := `Viper`
 	configPath := flag.String("path", defaultPath, "Falcon BMS directory")
 	callsign := flag.String("callsign", defaultCallsign, "Callsign")
+	fsCheckFreqStr := flag.String("fs-check-freq", "1000", "Milliseconds between checking file system for changes")
+	posUpdateFreqStr := flag.String("pos-update-freq", "250", "Milliseconds between sending position updates")
 	addr := flag.String("addr", ":8080", "HTTP service address")
 	flag.Parse()
+
+	fsCheckFreq, _ := strconv.Atoi(*fsCheckFreqStr)
+	posUpdateFreq, _ := strconv.Atoi(*posUpdateFreqStr)
 
 	fullPath := filepath.Join(*configPath, `User\Config`, *callsign+".ini")
 
@@ -59,7 +65,7 @@ func main() {
 					if debounceTimer != nil {
 						debounceTimer.Stop()
 					}
-					debounceTimer = time.AfterFunc(1*time.Second, func() {
+					debounceTimer = time.AfterFunc(time.Duration(fsCheckFreq)*time.Millisecond, func() {
 						log.Printf("broadcasting callsign.ini update")
 						msg := AgentMessage{
 							Type: "update",
@@ -92,7 +98,7 @@ func main() {
 	}
 
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := time.NewTicker(time.Duration(posUpdateFreq) * time.Millisecond)
 		defer ticker.Stop()
 		for {
 			select {
