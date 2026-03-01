@@ -112,6 +112,11 @@ func (r *SharedMemReader) getOwnShip() *OwnShip {
 	return &OwnShip{x, y, z}
 }
 
+func (r *SharedMemReader) getVersion() int {
+	v := int(r.fd1.VersionNum)
+	return v
+}
+
 func (r *SharedMemReader) isFlying() bool {
 	return r.fd1.hsiBits|0x80000000 > 0
 }

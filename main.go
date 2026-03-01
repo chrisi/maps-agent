@@ -44,8 +44,11 @@ func main() {
 	smr := SharedMemReader{}
 	err = smr.open()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error opening Falcon BMS shared memory: %v", err)
 	}
+
+	log.Println("successfully opened Falcon BMS shared memory")
+	log.Printf("FlightData-version: %d\n", smr.getVersion())
 
 	defer smr.close()
 
@@ -69,10 +72,6 @@ func main() {
 						log.Printf("broadcasting callsign.ini update")
 						msg := AgentMessage{
 							Type: "update",
-						}
-						if err != nil {
-							log.Printf("error reading shared memory: %v", err)
-							return
 						}
 						data, err := json.Marshal(msg)
 						if err != nil {
