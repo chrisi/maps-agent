@@ -5,6 +5,7 @@ Interactive Maps-app to connect to in order to simplify the mission planning.
 
 
 ## Build
+Download the scource, goto the main project directory and execute the following command
 ```
 go build -o c:\apps\maps-agent.exe maps-agent
 ```
