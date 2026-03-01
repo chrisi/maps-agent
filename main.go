@@ -13,67 +13,10 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for simplicity, match existing CORS policy
-	},
-}
-
-type AgentMessage struct {
-	Type    string      `json:"type"`
-	Version int         `json:"version,omitempty"`
-	Payload interface{} `json:"payload,omitempty"`
-}
-type Hub struct {
-	clients    map[*websocket.Conn]bool
-	broadcast  chan []byte
-	register   chan *websocket.Conn
-	unregister chan *websocket.Conn
-	mu         sync.Mutex
-}
-
-func newHub() *Hub {
-	return &Hub{
-		clients:    make(map[*websocket.Conn]bool),
-		broadcast:  make(chan []byte),
-		register:   make(chan *websocket.Conn),
-		unregister: make(chan *websocket.Conn),
-	}
-}
-
-func (h *Hub) run() {
-	for {
-		select {
-		case client := <-h.register:
-			h.mu.Lock()
-			h.clients[client] = true
-			h.mu.Unlock()
-		case client := <-h.unregister:
-			h.mu.Lock()
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				client.Close()
-			}
-			h.mu.Unlock()
-		case message := <-h.broadcast:
-			h.mu.Lock()
-			for client := range h.clients {
-				err := client.WriteMessage(websocket.TextMessage, message)
-				if err != nil {
-					log.Printf("error: %v", err)
-					client.Close()
-					delete(h.clients, client)
-				}
-			}
-			h.mu.Unlock()
-		}
-	}
-}
-
 func main() {
+	gin.SetMode(gin.ReleaseMode)
 	defaultPath := `C:\Progam Files\Falcon BMS 4.38`
 	defaultCallsign := `Viper`
 	configPath := flag.String("path", defaultPath, "Falcon BMS directory")
@@ -116,18 +59,18 @@ func main() {
 					if debounceTimer != nil {
 						debounceTimer.Stop()
 					}
-					debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
-						log.Printf("broadcasting update for: %s", fullPath)
+					debounceTimer = time.AfterFunc(1*time.Second, func() {
+						log.Printf("broadcasting callsign.ini update")
 						msg := AgentMessage{
 							Type: "update",
 						}
 						if err != nil {
-							log.Printf("Error reading shared memory: %v", err)
+							log.Printf("error reading shared memory: %v", err)
 							return
 						}
 						data, err := json.Marshal(msg)
 						if err != nil {
-							log.Printf("Error marshaling ship data: %v", err)
+							log.Printf("error marshaling ship data: %v", err)
 							return
 						}
 						hub.broadcast <- data
@@ -145,7 +88,7 @@ func main() {
 
 	err = watcher.Add(filepath.Dir(fullPath))
 	if err != nil {
-		log.Printf("Warning: Failed to add watcher for %s: %v", filepath.Dir(fullPath), err)
+		log.Printf("warning: failed to add watcher for %s: %v", filepath.Dir(fullPath), err)
 	}
 
 	go func() {
@@ -155,19 +98,13 @@ func main() {
 			select {
 			case <-ticker.C:
 				ship := smr.getOwnShip()
-				if err != nil {
-					log.Printf("Error reading shared memory: %v", err)
-					continue
-				}
-
 				msg := AgentMessage{
 					Type:    "pos",
 					Payload: &ship,
 				}
-
 				data, err := json.Marshal(msg)
 				if err != nil {
-					log.Printf("Error marshaling ship data: %v", err)
+					log.Printf("error marshaling ship data: %v", err)
 					continue
 				}
 				hub.broadcast <- data
@@ -189,12 +126,11 @@ func main() {
 	})
 
 	r.GET("/ini", func(c *gin.Context) {
+		log.Printf("callsign.ini requested")
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 			c.String(http.StatusNotFound, fullPath+" not found")
 			return
 		}
-
-		log.Printf("Serving file: %s", fullPath)
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, post-check=0, pre-check=0")
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
@@ -202,9 +138,10 @@ func main() {
 	})
 
 	r.GET("/ws", func(c *gin.Context) {
+		log.Printf("client connected from %s", c.ClientIP())
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			log.Printf("Upgrade error: %v", err)
+			log.Printf("upgrade error: %v", err)
 			return
 		}
 		hub.register <- conn
@@ -220,9 +157,9 @@ func main() {
 		}
 	})
 
-	log.Printf("Starting server on %s", *addr)
-
+	log.Printf("starting server on %s", *addr)
+	log.Printf("callsign.ini file: %s", fullPath)
 	if err := r.Run(*addr); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		log.Fatalf("server failed: %v", err)
 	}
 }
