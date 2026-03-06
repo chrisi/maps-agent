@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -21,6 +24,9 @@ func main() {
 	defaultPath := `C:\Progam Files\Falcon BMS 4.38`
 	defaultCallsign := `Viper`
 	configPath := flag.String("path", defaultPath, "Falcon BMS directory")
+	imcs := flag.Bool("imcs", false, "Establish IMCS connection")
+	imcsServer := flag.String("imcs-server", "wss://collab.falcon-bms.com:443", "IMCS Server the client should connect to")
+	imcsSession := flag.String("imcs-session", "47DF", "IMCS Session the client should connect to")
 	callsign := flag.String("callsign", defaultCallsign, "Callsign")
 	fsCheckFreqStr := flag.String("fs-check-freq", "1000", "Milliseconds between checking file system for changes")
 	posUpdateFreqStr := flag.String("pos-update-freq", "250", "Milliseconds between sending position updates")
@@ -39,16 +45,27 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer watcher.Close()
+	defer func(watcher *fsnotify.Watcher) {
+		_ = watcher.Close()
+	}(watcher)
 
 	smr := SharedMemReader{}
 	err = smr.open()
 	if err != nil {
 		log.Fatalf("error opening Falcon BMS shared memory: %v", err)
 	}
-
 	log.Println("successfully opened Falcon BMS shared memory")
 	log.Printf("FlightData-version: %d\n", smr.getVersion())
+
+	if *imcs {
+		client := newCollabClient(*imcsServer, &smr, *callsign, *imcsSession)
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		if err := client.Run(ctx); err != nil {
+			log.Fatalf("error connecting to the IMCS server: %v", err)
+		}
+		log.Println("successfully connected to the IMCS server")
+	}
 
 	defer smr.close()
 

@@ -47,7 +47,7 @@ func (h *Hub) run() {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				client.Close()
+				_ = client.Close()
 			}
 			h.mu.Unlock()
 		case message := <-h.broadcast:
@@ -56,7 +56,7 @@ func (h *Hub) run() {
 				err := client.WriteMessage(websocket.TextMessage, message)
 				if err != nil {
 					log.Printf("error: %v", err)
-					client.Close()
+					_ = client.Close()
 					delete(h.clients, client)
 				}
 			}
