@@ -3,9 +3,9 @@
 A small web server that exposes a couple of local Falcon BMS mission/campaign info for the
 Interactive Maps-app to connect to in order to simplify the mission planning.
 
-The agent can directly communicate with the Falcon BMS IMCS server need for the Intarctive Maps-app to be running.
-This iis useful, for example, when the Maps-app is not being used, but position data should still be provided to
-the other members of the IMCS session.
+The agent can directly communicate with the Falcon BMS IMCS server without the need for the
+Intarctive Maps to be running. This iis useful, for example, when the Maps-app is not being used,
+but position data should still be provided to the other members of the IMCS session.
 
 ## Build
 
