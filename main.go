@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
+	"maps-agent/camtac"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,6 +25,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	defaultPath := `C:\Progam Files\Falcon BMS 4.38`
 	defaultCallsign := `Viper`
+	readCamtac := flag.Bool("camtac", false, "Read TAM/TAC files")
 	configPath := flag.String("path", defaultPath, "Falcon BMS directory")
 	imcs := flag.Bool("imcs", false, "Establish IMCS connection")
 	imcsServer := flag.String("imcs-server", "wss://collab.falcon-bms.com:443", "IMCS Server the client should connect to")
@@ -32,6 +35,59 @@ func main() {
 	posUpdateFreqStr := flag.String("pos-update-freq", "250", "Milliseconds between sending position updates")
 	addr := flag.String("addr", ":8080", "HTTP service address")
 	flag.Parse()
+
+	if *readCamtac {
+
+		//dataBase := "c:\\projects\\Skunkworks\\cam-tac-files\\"
+		campaignBase := "c:\\apps\\Falcon BMS 4.38\\Data\\Campaign\\"
+
+		reader, err := camtac.NewF4CampaignFileBundleReaderFromFile(campaignBase + "te_1_flight.tac")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		files, err := reader.GetEmbeddedFileDirectory()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for _, f := range files {
+			fmt.Printf("Name=%s Offset=%d Size=%d\n", f.FileName, f.FileOffset, f.FileSizeBytes)
+		}
+
+		data, err := reader.GetEmbeddedFileContents("te_1_flight.uni")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		cur := camtac.NewCursor(data)
+
+		_ = cur.Int32() // compSize
+		numUnits := cur.Int16()
+		expSize := cur.Int32()
+
+		expanded, err := camtac.Expand(data[10:], expSize)
+
+		fmt.Println("Compressed size:", len(data))
+		fmt.Println("Uncompressed size:", len(expanded))
+		fmt.Println("Units:", numUnits)
+
+		os.Exit(0)
+	}
+
+	//writer := camtac.NewF4CampaignFileBundleWriter()
+	//
+	//if err := writer.AddFile("mission.txt", []byte("hello world")); err != nil {
+	//	log.Fatal(err)
+	//}
+	//
+	//if err := writer.AddFile("config.bin", []byte{0x01, 0x02, 0x03, 0x04}); err != nil {
+	//	log.Fatal(err)
+	//}
+	//
+	//if err := writer.Save("example.cam"); err != nil {
+	//	log.Fatal(err)
+	//}
 
 	fsCheckFreq, _ := strconv.Atoi(*fsCheckFreqStr)
 	posUpdateFreq, _ := strconv.Atoi(*posUpdateFreqStr)
