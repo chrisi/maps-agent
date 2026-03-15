@@ -64,13 +64,19 @@ func main() {
 
 		_ = cur.Int32() // compSize
 		numUnits := cur.Int16()
-		expSize := cur.Int32()
+		expSize := int(cur.Int32())
 
 		expanded, err := camtac.Expand(data[10:], expSize)
 
 		fmt.Println("Compressed size:", len(data))
 		fmt.Println("Uncompressed size:", len(expanded))
 		fmt.Println("Units:", numUnits)
+
+		units := camtac.ReadUnits(expanded)
+
+		for _, unit := range units {
+			fmt.Printf("Unit: %+v\n", unit)
+		}
 
 		os.Exit(0)
 	}

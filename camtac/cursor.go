@@ -14,12 +14,12 @@ func (c *Cursor) Int8() int {
 	return int(c.Uint8())
 }
 
-func (c *Cursor) Int16() int {
-	return int(c.Uint16())
+func (c *Cursor) Int16() int16 {
+	return int16(c.Uint16())
 }
 
-func (c *Cursor) Int32() int {
-	return int(c.Uint32())
+func (c *Cursor) Int32() int32 {
+	return int32(c.Uint32())
 }
 
 func (c *Cursor) Int64() int {
