@@ -98,9 +98,9 @@ func readUnit(c *Cursor) Unit {
 		Reinforcement: c.Uint16(),
 		NumWaypoints:  c.Uint16(),
 	}
-	u.WP = make([]Waypoint, u.NumWaypoints)
+	u.Waypoints = make([]Waypoint, u.NumWaypoints)
 	for i := range u.NumWaypoints {
-		u.WP[i] = readWaypoint(c)
+		u.Waypoints[i] = readWaypoint(c)
 	}
 	return u
 }
