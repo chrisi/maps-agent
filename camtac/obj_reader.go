@@ -21,9 +21,9 @@ func (or *ObjectiveReader) ReadObjFile(data []byte) []Objective {
 	or.log.Infof("Reading objectives")
 
 	hdrCur := NewCursor(data)
-	_ = hdrCur.Int32() // compSize
 	or.numObjectives = int(hdrCur.Int16())
 	expSize := int(hdrCur.Int32())
+	_ = hdrCur.Int32() // newSize-called in orig, not needed
 
 	expanded, err := Expand(data[10:], expSize)
 	if err != nil {
@@ -31,8 +31,8 @@ func (or *ObjectiveReader) ReadObjFile(data []byte) []Objective {
 		return nil
 	}
 
-	or.log.Debugf("Compressed size: %d", len(data))
-	or.log.Debugf("Uncompressed size: %d", len(expanded))
+	or.log.Infof("Compressed size: %d", len(data))
+	or.log.Infof("Uncompressed size: %d", len(expanded))
 	or.log.Infof("Objectives: %d", or.numObjectives)
 
 	return or.readObjectives(expanded)
@@ -86,12 +86,23 @@ func readObjective(c *Cursor) Objective {
 		o.Links[i] = readCampObjectiveLinkDataType(c)
 	}
 	o.HasRadarData = c.Uint8()
+	if o.HasRadarData > 0 {
+		o.DetectRatios = make([]float32, 8)
+		for i := range 8 {
+			o.DetectRatios[i] = c.Float32()
+		}
+	}
 	o.PosX = c.Float64()
 	o.PosY = c.Float64()
 	o.PosZ = c.Float64()
 	o.Heading = c.Float32()
-	for i := range 80 {
-		o.CampName[i] = c.Uint8()
+
+	campNameRaw := c.Bytes(80)
+	n := 0
+	for n < len(campNameRaw) && campNameRaw[n] != 0 {
+		n++
 	}
+	o.CampName = string(campNameRaw[:n])
+
 	return o
 }

@@ -69,11 +69,12 @@ type Objective struct {
 	NumLinks     uint8                       `json:"numLinks"`
 	Links        []CampObjectiveLinkDataType `json:"links"`
 	HasRadarData uint8                       `json:"hasRadarData"`
+	DetectRatios []float32                   `json:"detectRatios"`
 	PosX         float64                     `json:"posX"`
 	PosY         float64                     `json:"posY"`
 	PosZ         float64                     `json:"posZ"`
 	Heading      float32                     `json:"heading"`
-	CampName     [80]byte                    `json:"campName"`
+	CampName     string                      `json:"campName"`
 }
 
 type Target struct {
