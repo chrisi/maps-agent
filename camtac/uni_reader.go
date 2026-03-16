@@ -43,6 +43,14 @@ func (f Flight) GetUnit() Unit {
 	return f.Unit
 }
 
+func (b Battalion) GetUnit() Unit {
+	return b.GroundUnit.Unit
+}
+
+func (b Brigade) GetUnit() Unit {
+	return b.GroundUnit.Unit
+}
+
 func (p Package) GetUnit() Unit {
 	return p.Unit
 }
@@ -103,11 +111,11 @@ func createUnitByClassType(classType *CT, c *Cursor) any {
 	case DomainLand:
 		switch classType.Type {
 		case TypeBattalion:
-			fmt.Println("Battalion not impl")
-			return nil //readBattalion(c)
+			logUniRd.Debugf("Reading battalion")
+			return readBattalion(c)
 		case TypeBrigade:
-			fmt.Println("Brigade not impl")
-			return nil //readBrigade(c)
+			logUniRd.Debugf("Reading brigade")
+			return readBrigade(c)
 		}
 
 	case DomainSea:
@@ -321,6 +329,43 @@ func readFlight(c *Cursor) Flight {
 		f.LoadedCft[i] = c.Uint8()
 	}
 	return f
+}
+
+func readGroundUnit(c *Cursor) GroundUnit {
+	return GroundUnit{
+		Unit:     readUnit(c),
+		Orders:   c.Uint8(),
+		Division: c.Uint16(),
+		AObj:     readVU_ID(c),
+	}
+}
+
+func readBattalion(c *Cursor) Battalion {
+	return Battalion{
+		GroundUnit:   readGroundUnit(c),
+		LastMove:     c.Uint32(),
+		LastCombat:   c.Uint32(),
+		ParentID:     readVU_ID(c),
+		LastObj:      readVU_ID(c),
+		Supply:       c.Uint8(),
+		Fatigue:      c.Uint8(),
+		Morale:       c.Uint8(),
+		Heading:      c.Uint8(),
+		FinalHeading: c.Uint8(),
+		Position:     c.Uint8(),
+	}
+}
+
+func readBrigade(c *Cursor) Brigade {
+	b := Brigade{
+		GroundUnit:  readGroundUnit(c),
+		NumElements: c.Uint8(),
+	}
+	b.Elements = make([]VU_ID, b.NumElements)
+	for i := range b.NumElements {
+		b.Elements[i] = readVU_ID(c)
+	}
+	return b
 }
 
 func readPackage(c *Cursor) Package {

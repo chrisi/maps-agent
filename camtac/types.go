@@ -103,7 +103,7 @@ type Unit struct {
 	NameID        uint16       `json:"nameId"`
 	Reinforcement uint16       `json:"reinforcement"`
 	NumWaypoints  uint16       `json:"numWaypoints"`
-	Waypoints     []Waypoint   `json:"Waypoints"`
+	Waypoints     []Waypoint   `json:"waypoints"`
 }
 
 type GroundUnit struct {
@@ -125,6 +125,12 @@ type Battalion struct {
 	Heading      uint8      `json:"heading"`
 	FinalHeading uint8      `json:"finalHeading"`
 	Position     uint8      `json:"position"`
+}
+
+type Brigade struct {
+	GroundUnit  GroundUnit `json:"groundUnit"`
+	NumElements uint8      `json:"numElements"`
+	Elements    []VU_ID    `json:"elements"`
 }
 
 type Pilot struct {

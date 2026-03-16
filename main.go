@@ -40,9 +40,9 @@ func main() {
 	logBdRed := util.NewLogger("FileBundleReader", os.Stdout, util.Debug, false)
 
 	if *readCamtac {
-		//filename := "mc-test-campaing.cam"
+		filename := "mc-test-campaing.cam"
 		//filename := "te_1_flight.tac"
-		filename := "bata_1.tac"
+		//filename := "bata_1.tac"
 
 		dataBase := "c:/projects/Skunkworks/cam-tac-files"
 		falconBase := "c:/apps/Falcon BMS 4.38/Data"
