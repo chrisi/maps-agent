@@ -37,7 +37,7 @@ func main() {
 	addr := flag.String("addr", ":8080", "HTTP service address")
 	flag.Parse()
 
-	logBdRed := util.NewLogger("FileBundleReader", os.Stdout, util.Debug, false)
+	logBdRed := util.NewLogger("FileBundleReader", os.Stdout, util.Info, true)
 
 	if *readCamtac {
 		filename := "mc-test-campaing.cam"
@@ -78,7 +78,17 @@ func main() {
 			log.Fatal(err)
 		}
 
-		units := camtac.ReadUniFile(data, cts)
+		unitReader := camtac.NewUnitReader(cts)
+		units := unitReader.ReadUniFile(data)
+		unitCounts := unitReader.Counts()
+
+		logBdRed.Infof("Num Units:       %d", unitCounts.NumUnits)
+		logBdRed.Infof("Num Squadrons:   %d", unitCounts.NumSquadrons)
+		logBdRed.Infof("Num Packages:    %d", unitCounts.NumPackages)
+		logBdRed.Infof("Num Flights:     %d", unitCounts.NumFlights)
+		logBdRed.Infof("Num Brigades:    %d", unitCounts.NumBrigades)
+		logBdRed.Infof("Num Battalions:  %d", unitCounts.NumBattalions)
+		logBdRed.Infof("Num Task Forces: %d", unitCounts.NumTaskForces)
 
 		err = camtac.WriteUnitsToJSON(units, dataBase+"/"+fileNoExt+"_units.json")
 		if err != nil {

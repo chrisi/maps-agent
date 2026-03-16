@@ -5,33 +5,155 @@ import (
 	"os"
 )
 
-var logUniRd = util.NewLogger("UNI-Reader", os.Stdout, util.Debug, true)
+type Counts struct {
+	NumUnits      int
+	NumFlights    int
+	NumBattalions int
+	NumBrigades   int
+	NumPackages   int
+	NumSquadrons  int
+	NumTaskForces int
+}
 
-func ReadUniFile(data []byte, cts []*CT) []any {
+type UnitReader struct {
+	classTable []*CT
+	numUnits   int
+	counters   Counts
+	c          *Cursor
+	log        *util.Logger
+}
 
-	logUniRd.Infof("Reading units")
+func NewUnitReader(classTable []*CT) *UnitReader {
+	return &UnitReader{
+		classTable: classTable,
+		log:        util.NewLogger("UNI-Reader", os.Stdout, util.Info, true),
+	}
+}
 
-	cur := NewCursor(data)
+func (ur *UnitReader) ReadUniFile(data []byte) []any {
 
-	_ = cur.Int32() // compSize
-	numUnits := int(cur.Int16())
-	expSize := int(cur.Int32())
+	ur.log.Infof("Reading units")
+
+	ur.counters = Counts{
+		NumUnits:      0,
+		NumFlights:    0,
+		NumBattalions: 0,
+		NumBrigades:   0,
+		NumPackages:   0,
+		NumSquadrons:  0,
+		NumTaskForces: 0,
+	}
+
+	hdrCur := NewCursor(data)
+	_ = hdrCur.Int32() // compSize
+	ur.numUnits = int(hdrCur.Int16())
+	expSize := int(hdrCur.Int32())
 
 	expanded, err := Expand(data[10:], expSize)
 	if err != nil {
-		logUniRd.Errorf("Error expanding data: %v", err)
+		ur.log.Errorf("Error expanding data: %v", err)
 		return nil
 	}
 
-	logUniRd.Debugf("Compressed size: %d", len(data))
-	logUniRd.Debugf("Uncompressed size: %d", len(expanded))
-	logUniRd.Debugf("Units: %d", numUnits)
+	ur.log.Debugf("Compressed size: %d", len(data))
+	ur.log.Debugf("Uncompressed size: %d", len(expanded))
+	ur.log.Infof("Units: %d", ur.numUnits)
 
-	return ReadUnits(expanded, cts, numUnits)
+	return ur.readUnits(expanded)
+}
+
+func (ur *UnitReader) Counts() Counts {
+	return ur.counters
 }
 
 type HasUnit interface {
 	GetUnit() Unit
+}
+
+func (ur *UnitReader) readUnits(data []byte) []any {
+	ur.c = NewCursor(data)
+	var units []any
+	for i := 0; i < ur.numUnits; i++ {
+		unit := ur.createUnit()
+		units = append(units, unit)
+	}
+	return units
+}
+
+func (ur *UnitReader) createUnit() any {
+	unitType := int(ur.c.Uint16())
+	if unitType <= len(ur.classTable)+100 {
+		if unitType >= 100 {
+			ur.log.Debugf("UnitType: %d", unitType)
+			start := ur.c.pos
+			unit := ur.createUnitByClassType(ur.classTable[unitType-100])
+			size := ur.c.pos - start
+			numWp := -1
+			hu, ok := unit.(HasUnit)
+			if ok {
+				numWp = len(hu.GetUnit().Waypoints)
+			}
+			if numWp > 20 || size > 2000 {
+				ur.log.Warnf("Unit size: %d, waypoints: %d", size, numWp)
+			}
+			return unit
+		} else if unitType > 3707 { // TODO: ergibt wenig Sinn, ist aber im Original so
+			ur.log.Warnf("UnitType strange:", unitType)
+			return ur.createUnitByClassType(ur.classTable[3607])
+		} else {
+			ur.log.Warnf("UnitType 430")
+			return ur.createUnitByClassType(ur.classTable[430])
+		}
+	}
+	return nil
+}
+
+func (ur *UnitReader) createUnitByClassType(classType *CT) any {
+	switch classType.Domain {
+	case DomainAir:
+		switch classType.Type {
+		case TypeFlight:
+			ur.log.Debugf("Reading flight")
+			ur.counters.NumUnits++
+			ur.counters.NumFlights++
+			return readFlight(ur.c)
+		case TypePackage:
+			ur.log.Debugf("Reading package")
+			ur.counters.NumUnits++
+			ur.counters.NumPackages++
+			return readPackage(ur.c)
+		case TypeSquadron:
+			ur.log.Debugf("Reading squadron")
+			ur.counters.NumUnits++
+			ur.counters.NumSquadrons++
+			return readSquadron(ur.c)
+		}
+
+	case DomainLand:
+		switch classType.Type {
+		case TypeBattalion:
+			ur.log.Debugf("Reading battalion")
+			ur.counters.NumUnits++
+			ur.counters.NumBattalions++
+			return readBattalion(ur.c)
+		case TypeBrigade:
+			ur.log.Debugf("Reading brigade")
+			ur.counters.NumUnits++
+			ur.counters.NumBrigades++
+			return readBrigade(ur.c)
+		}
+
+	case DomainSea:
+		switch classType.Type {
+		case TypeTaskForce:
+			ur.log.Debugf("Reading task-force")
+			ur.counters.NumUnits++
+			ur.counters.NumTaskForces++
+			return readTaskForce(ur.c)
+		}
+	}
+	ur.log.Warnf("Unknown unit type: %d", classType.Type)
+	return nil
 }
 
 func (s Squadron) GetUnit() Unit {
@@ -52,80 +174,6 @@ func (b Brigade) GetUnit() Unit {
 
 func (p Package) GetUnit() Unit {
 	return p.Unit
-}
-
-func ReadUnits(data []byte, classTable []*CT, numUnits int) []any {
-	c := NewCursor(data)
-	var units []any
-	for i := 0; i < numUnits; i++ {
-		unit := createUnit(classTable, c)
-		units = append(units, unit)
-	}
-	return units
-}
-
-func createUnit(classTable []*CT, c *Cursor) any {
-	unitType := int(c.Uint16())
-	if unitType <= len(classTable)+100 {
-		if unitType >= 100 {
-			logUniRd.Debugf("UnitType: %d", unitType)
-			start := c.pos
-			unit := createUnitByClassType(classTable[unitType-100], c)
-			size := c.pos - start
-			numWp := -1
-			hu, ok := unit.(HasUnit)
-			if ok {
-				numWp = len(hu.GetUnit().Waypoints)
-			}
-			if numWp > 20 || size > 2000 {
-				logUniRd.Warnf("Unit size: %d, waypoints: %d", size, numWp)
-			}
-			return unit
-		} else if unitType > 3707 { // TODO: ergibt wenig Sinn, ist aber im Original so
-			logUniRd.Warnf("UnitType strange:", unitType)
-			return createUnitByClassType(classTable[3607], c)
-		} else {
-			logUniRd.Warnf("UnitType 430")
-			return createUnitByClassType(classTable[430], c)
-		}
-	}
-	return nil
-}
-
-func createUnitByClassType(classType *CT, c *Cursor) any {
-	switch classType.Domain {
-	case DomainAir:
-		switch classType.Type {
-		case TypeFlight:
-			logUniRd.Debugf("Reading flight")
-			return readFlight(c)
-		case TypePackage:
-			logUniRd.Debugf("Reading package")
-			return readPackage(c)
-		case TypeSquadron:
-			logUniRd.Debugf("Reading squadron")
-			return readSquadron(c)
-		}
-
-	case DomainLand:
-		switch classType.Type {
-		case TypeBattalion:
-			logUniRd.Debugf("Reading battalion")
-			return readBattalion(c)
-		case TypeBrigade:
-			logUniRd.Debugf("Reading brigade")
-			return readBrigade(c)
-		}
-
-	case DomainSea:
-		switch classType.Type {
-		case TypeTaskForce:
-			logUniRd.Debugf("Reading task-force")
-			return readTaskForce(c)
-		}
-	}
-	logUniRd.Warnf("Unknown unit type: %d", classType.Type)
-	return nil
 }
 
 func readVU_ID(c *Cursor) VU_ID {
