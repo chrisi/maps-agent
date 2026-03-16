@@ -40,7 +40,8 @@ func main() {
 		//filename := "te_1_flight.tac"
 		//filename := "bata_1.tac"
 
-		camtac.ReadMission(*falconBase, filename, "c:/projects/Skunkworks/cam-tac-files")
+		manager := camtac.NewMissionManager(*falconBase)
+		manager.ReadMission(filename, "c:/projects/Skunkworks/cam-tac-files")
 
 		os.Exit(0)
 	}

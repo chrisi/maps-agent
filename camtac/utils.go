@@ -1,5 +1,10 @@
 package camtac
 
+import (
+	"encoding/json"
+	"os"
+)
+
 func CreateClassTable(records *CTRecords) []*CT {
 	maxNum := 0
 	for _, ct := range records.CTs {
@@ -14,4 +19,17 @@ func CreateClassTable(records *CTRecords) []*CT {
 	}
 
 	return ctByNum
+}
+
+func WriteToJSON(data any, filename string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
+	encoder := json.NewEncoder(f)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(data)
 }

@@ -6,7 +6,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
+)
+
+type EmbeddedFileType string
+
+const (
+	UnitType           EmbeddedFileType = ".uni"
+	ObjectiveType      EmbeddedFileType = ".obj"
+	ObjectiveDeltaType EmbeddedFileType = ".obd"
+	CampaignType       EmbeddedFileType = ".cmp"
 )
 
 type FileBundleReader struct {
@@ -102,25 +112,37 @@ func (r *FileBundleReader) GetEmbeddedFileDirectory() ([]EmbeddedFileInfo, error
 	return result, nil
 }
 
-func (r *FileBundleReader) GetEmbeddedFileContents(embeddedFileName string) ([]byte, error) {
+func (r *FileBundleReader) GetEmbeddedFileContentsByInfo(fileInfo EmbeddedFileInfo) ([]byte, error) {
+	start := int(fileInfo.FileOffset)
+	end := start + int(fileInfo.FileSizeBytes)
+	if start < 0 || end > len(r.rawBytes) || start > end {
+		return nil, fmt.Errorf("invalid embedded file range for %q", fileInfo.FileName)
+	}
+	toReturn := make([]byte, fileInfo.FileSizeBytes)
+	copy(toReturn, r.rawBytes[start:end])
+	return toReturn, nil
+}
+
+func (r *FileBundleReader) GetEmbeddedFileContentsByType(fileType EmbeddedFileType) ([]byte, error) {
 	if r.embeddedFileDirectory == nil || len(r.rawBytes) == 0 {
 		return nil, fmt.Errorf("campaign bundle file not loaded yet")
 	}
-
 	for _, thisFile := range r.embeddedFileDirectory {
-		if strings.EqualFold(thisFile.FileName, embeddedFileName) {
-			start := int(thisFile.FileOffset)
-			end := start + int(thisFile.FileSizeBytes)
-
-			if start < 0 || end > len(r.rawBytes) || start > end {
-				return nil, fmt.Errorf("invalid embedded file range for %q", embeddedFileName)
-			}
-
-			toReturn := make([]byte, thisFile.FileSizeBytes)
-			copy(toReturn, r.rawBytes[start:end])
-			return toReturn, nil
+		if strings.EqualFold(filepath.Ext(thisFile.FileName), string(fileType)) {
+			return r.GetEmbeddedFileContentsByInfo(thisFile)
 		}
 	}
+	return nil, fmt.Errorf("embedded file type not found: %s", fileType)
+}
 
+func (r *FileBundleReader) GetEmbeddedFileContentsByName(embeddedFileName string) ([]byte, error) {
+	if r.embeddedFileDirectory == nil || len(r.rawBytes) == 0 {
+		return nil, fmt.Errorf("campaign bundle file not loaded yet")
+	}
+	for _, thisFile := range r.embeddedFileDirectory {
+		if strings.EqualFold(thisFile.FileName, embeddedFileName) {
+			return r.GetEmbeddedFileContentsByInfo(thisFile)
+		}
+	}
 	return nil, fmt.Errorf("embedded file not found: %s", embeddedFileName)
 }
