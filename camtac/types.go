@@ -77,6 +77,17 @@ type Objective struct {
 	CampName     string                      `json:"campName"`
 }
 
+type ObjectiveDeltas struct {
+	ID          VU_ID   `json:"id"`
+	LastRepair  uint32  `json:"lastRepair"`
+	Owner       uint8   `json:"owner"`
+	Supply      uint8   `json:"supply"`
+	Fuel        uint8   `json:"fuel"`
+	Losses      uint8   `json:"losses"`
+	NumStatuses uint8   `json:"numStatuses"`
+	Statuses    []uint8 `json:"statuses"`
+}
+
 type Target struct {
 	ID       VU_ID `json:"id"`
 	Building uint8 `json:"building"`
