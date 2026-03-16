@@ -7,7 +7,6 @@ import (
 
 type ObjectiveReader struct {
 	numObjectives int
-	c             *Cursor
 	log           *util.Logger
 }
 
@@ -23,7 +22,7 @@ func (or *ObjectiveReader) ReadObjFile(data []byte) []Objective {
 	hdrCur := NewCursor(data)
 	or.numObjectives = int(hdrCur.Int16())
 	expSize := int(hdrCur.Int32())
-	_ = hdrCur.Int32() // newSize-called in orig, not needed
+	_ = hdrCur.Int32() // newSize
 
 	expanded, err := Expand(data[10:], expSize)
 	if err != nil {
@@ -35,22 +34,18 @@ func (or *ObjectiveReader) ReadObjFile(data []byte) []Objective {
 	or.log.Infof("Uncompressed size: %d", len(expanded))
 	or.log.Infof("Objectives: %d", or.numObjectives)
 
-	return or.readObjectives(expanded)
+	return or.readAllObjectives(expanded)
 }
 
-func (or *ObjectiveReader) readObjectives(data []byte) []Objective {
-	or.c = NewCursor(data)
+func (or *ObjectiveReader) readAllObjectives(data []byte) []Objective {
+	c := NewCursor(data)
 	var objectives []Objective
 	for i := 0; i < or.numObjectives; i++ {
-		obj := or.createObjective()
+		_ = int(c.Uint16()) // objectiveType (analog zu unitType)
+		obj := readObjective(c)
 		objectives = append(objectives, obj)
 	}
 	return objectives
-}
-
-func (or *ObjectiveReader) createObjective() Objective {
-	_ = int(or.c.Uint16()) // objectiveType (analog zu unitType)
-	return readObjective(or.c)
 }
 
 func readCampObjectiveLinkDataType(c *Cursor) CampObjectiveLinkDataType {

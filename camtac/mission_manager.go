@@ -67,6 +67,14 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 	objectives := objectiveReader.ReadObjFile(objectiveData)
 	logBdRed.Infof("Num Objectives: %d", len(objectives))
 
+	deltaData, err := missionBundle.GetEmbeddedFileContentsByType(ObjectiveDeltaType)
+	if err != nil {
+		log.Fatal(err)
+	}
+	deltaReader := NewObjectiveDeltaReader()
+	deltas := deltaReader.ReadObdFile(deltaData)
+	logBdRed.Infof("Num Deltas: %d", len(deltas))
+
 	unitData, err := missionBundle.GetEmbeddedFileContentsByType(UnitType)
 	if err != nil {
 		log.Fatal(err)
@@ -91,5 +99,9 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 	err = WriteToJSON(objectives, outputBase+"/"+fileNoExt+"_objectives.json")
 	if err != nil {
 		logBdRed.Errorf("error writing objectives to JSON: %v", err)
+	}
+	err = WriteToJSON(deltas, outputBase+"/"+fileNoExt+"_deltas.json")
+	if err != nil {
+		logBdRed.Errorf("error writing deltas to JSON: %v", err)
 	}
 }
