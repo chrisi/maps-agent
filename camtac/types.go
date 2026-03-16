@@ -1,5 +1,40 @@
 package camtac
 
+//type VuClassHierarchy int
+//
+//const (
+//	VuDomain VuClassHierarchy = 0
+//	VuClass  VuClassHierarchy = 1
+//	VuType   VuClassHierarchy = 2
+//	VuSType  VuClassHierarchy = 3
+//	VuSPType VuClassHierarchy = 4
+//	VuOwner  VuClassHierarchy = 5
+//)
+
+const (
+	DomainAbstract    = 1
+	DomainAir         = 2
+	DomainLand        = 3
+	DomainSea         = 4
+	DomainSpace       = 5
+	DomainUnderground = 6
+	DomainUndersea    = 7
+)
+
+const (
+	TypeNothing = 1
+	TypeATM     = 1
+
+	TypeFlight   = 1
+	TypePackage  = 2
+	TypeSquadron = 3
+
+	TypeBattalion = 1
+	TypeBrigade   = 2
+
+	TypeTaskForce = 1
+)
+
 type EmbeddedFileInfo struct {
 	FileName      string
 	FileOffset    uint32
@@ -69,6 +104,27 @@ type Unit struct {
 	Reinforcement uint16       `json:"reinforcement"`
 	NumWaypoints  uint16       `json:"numWaypoints"`
 	Waypoints     []Waypoint   `json:"Waypoints"`
+}
+
+type GroundUnit struct {
+	Unit     Unit   `json:"unit"`
+	Orders   uint8  `json:"orders"`
+	Division uint16 `json:"division"`
+	AObj     VU_ID  `json:"aObj"`
+}
+
+type Battalion struct {
+	GroundUnit   GroundUnit `json:"groundUnit"`
+	LastMove     uint32     `json:"lastMove"`
+	LastCombat   uint32     `json:"lastCombat"`
+	ParentID     VU_ID      `json:"parentId"`
+	LastObj      VU_ID      `json:"lastObj"`
+	Supply       uint8      `json:"supply"`
+	Fatigue      uint8      `json:"fatigue"`
+	Morale       uint8      `json:"morale"`
+	Heading      uint8      `json:"heading"`
+	FinalHeading uint8      `json:"finalHeading"`
+	Position     uint8      `json:"position"`
 }
 
 type Pilot struct {

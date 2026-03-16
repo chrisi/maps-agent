@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"maps-agent/camtac"
+	"maps-agent/util"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -36,12 +37,28 @@ func main() {
 	addr := flag.String("addr", ":8080", "HTTP service address")
 	flag.Parse()
 
+	logBdRed := util.NewLogger("FileBundleReader", os.Stdout, util.Debug, false)
+
 	if *readCamtac {
+		//filename := "mc-test-campaing.cam"
+		//filename := "te_1_flight.tac"
+		filename := "bata_1.tac"
 
-		//dataBase := "c:\\projects\\Skunkworks\\cam-tac-files\\"
-		campaignBase := "c:\\apps\\Falcon BMS 4.38\\Data\\Campaign\\"
+		dataBase := "c:/projects/Skunkworks/cam-tac-files"
+		falconBase := "c:/apps/Falcon BMS 4.38/Data"
+		campaignBase := falconBase + "/Campaign"
+		ctFile := falconBase + "/TerrData/Objects/Falcon4_CT.xml"
 
-		reader, err := camtac.NewF4CampaignFileBundleReaderFromFile(campaignBase + "te_1_flight.tac")
+		logBdRed.Infof("Creating ClassTable")
+		records, err := camtac.LoadCTRecords(ctFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		cts := camtac.CreateClassTable(records)
+		logBdRed.Debugf("ClassTypes: %d", len(cts))
+
+		logBdRed.Infof("Reading table of content")
+		reader, err := camtac.NewFileBundleReaderFromFile(campaignBase + "/" + filename)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -52,30 +69,20 @@ func main() {
 		}
 
 		for _, f := range files {
-			fmt.Printf("Name=%s Offset=%d Size=%d\n", f.FileName, f.FileOffset, f.FileSizeBytes)
+			logBdRed.Debugf("Name: %s, Offset: %d,  Size: %d", f.FileName, f.FileOffset, f.FileSizeBytes)
 		}
 
-		data, err := reader.GetEmbeddedFileContents("te_1_flight.uni")
+		fileNoExt := strings.TrimSuffix(filename, filepath.Ext(filename))
+		data, err := reader.GetEmbeddedFileContents(fileNoExt + ".uni")
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		cur := camtac.NewCursor(data)
+		units := camtac.ReadUniFile(data, cts)
 
-		_ = cur.Int32() // compSize
-		numUnits := cur.Int16()
-		expSize := int(cur.Int32())
-
-		expanded, err := camtac.Expand(data[10:], expSize)
-
-		fmt.Println("Compressed size:", len(data))
-		fmt.Println("Uncompressed size:", len(expanded))
-		fmt.Println("Units:", numUnits)
-
-		units := camtac.ReadUnits(expanded)
-
-		for _, unit := range units {
-			fmt.Printf("Unit: %+v\n", unit)
+		err = camtac.WriteUnitsToJSON(units, dataBase+"/"+fileNoExt+"_units.json")
+		if err != nil {
+			logBdRed.Errorf("error writing units to JSON: %v", err)
 		}
 
 		os.Exit(0)

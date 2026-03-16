@@ -9,24 +9,24 @@ import (
 	"strings"
 )
 
-type F4CampaignFileBundleReader struct {
+type FileBundleReader struct {
 	embeddedFileDirectory []EmbeddedFileInfo
 	rawBytes              []byte
 }
 
-func NewF4CampaignFileBundleReader() *F4CampaignFileBundleReader {
-	return &F4CampaignFileBundleReader{}
+func NewFileBundleReader() *FileBundleReader {
+	return &FileBundleReader{}
 }
 
-func NewF4CampaignFileBundleReaderFromFile(campaignFileBundleFileName string) (*F4CampaignFileBundleReader, error) {
-	r := NewF4CampaignFileBundleReader()
+func NewFileBundleReaderFromFile(campaignFileBundleFileName string) (*FileBundleReader, error) {
+	r := NewFileBundleReader()
 	if err := r.Load(campaignFileBundleFileName); err != nil {
 		return nil, err
 	}
 	return r, nil
 }
 
-func (r *F4CampaignFileBundleReader) Load(campaignFileBundleFileName string) error {
+func (r *FileBundleReader) Load(campaignFileBundleFileName string) error {
 	f, err := os.Open(campaignFileBundleFileName)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -92,7 +92,7 @@ func (r *F4CampaignFileBundleReader) Load(campaignFileBundleFileName string) err
 	return nil
 }
 
-func (r *F4CampaignFileBundleReader) GetEmbeddedFileDirectory() ([]EmbeddedFileInfo, error) {
+func (r *FileBundleReader) GetEmbeddedFileDirectory() ([]EmbeddedFileInfo, error) {
 	if r.embeddedFileDirectory == nil || len(r.rawBytes) == 0 {
 		return nil, fmt.Errorf("campaign bundle file not loaded yet")
 	}
@@ -102,7 +102,7 @@ func (r *F4CampaignFileBundleReader) GetEmbeddedFileDirectory() ([]EmbeddedFileI
 	return result, nil
 }
 
-func (r *F4CampaignFileBundleReader) GetEmbeddedFileContents(embeddedFileName string) ([]byte, error) {
+func (r *FileBundleReader) GetEmbeddedFileContents(embeddedFileName string) ([]byte, error) {
 	if r.embeddedFileDirectory == nil || len(r.rawBytes) == 0 {
 		return nil, fmt.Errorf("campaign bundle file not loaded yet")
 	}

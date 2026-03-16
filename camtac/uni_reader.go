@@ -1,26 +1,123 @@
 package camtac
 
-func ReadUnits(data []byte) []interface{} {
+import (
+	"fmt"
+	"maps-agent/util"
+	"os"
+)
+
+var logUniRd = util.NewLogger("UNI-Reader", os.Stdout, util.Debug, true)
+
+func ReadUniFile(data []byte, cts []*CT) []any {
+
+	logUniRd.Infof("Reading units")
+
+	cur := NewCursor(data)
+
+	_ = cur.Int32() // compSize
+	numUnits := int(cur.Int16())
+	expSize := int(cur.Int32())
+
+	expanded, err := Expand(data[10:], expSize)
+	if err != nil {
+		logUniRd.Errorf("Error expanding data: %v", err)
+		return nil
+	}
+
+	logUniRd.Debugf("Compressed size: %d", len(data))
+	logUniRd.Debugf("Uncompressed size: %d", len(expanded))
+	logUniRd.Debugf("Units: %d", numUnits)
+
+	return ReadUnits(expanded, cts, numUnits)
+}
+
+type HasUnit interface {
+	GetUnit() Unit
+}
+
+func (s Squadron) GetUnit() Unit {
+	return s.Unit
+}
+
+func (f Flight) GetUnit() Unit {
+	return f.Unit
+}
+
+func (p Package) GetUnit() Unit {
+	return p.Unit
+}
+
+func ReadUnits(data []byte, classTable []*CT, numUnits int) []any {
 	c := NewCursor(data)
-	var units []interface{}
-
-	// Read Data root
-	// u16 typeSquad;
-	// Squadron squad;
-	c.Uint16() // typeSquad
-	units = append(units, readSquadron(c))
-
-	// u16 typeFlight;
-	// Flight flight;
-	c.Uint16() // typeFlight
-	units = append(units, readFlight(c))
-
-	// u16 typePackage;
-	// Package pack;
-	c.Uint16() // typePackage
-	units = append(units, readPackage(c))
-
+	var units []any
+	for i := 0; i < numUnits; i++ {
+		unit := createUnit(classTable, c)
+		units = append(units, unit)
+	}
 	return units
+}
+
+func createUnit(classTable []*CT, c *Cursor) any {
+	unitType := int(c.Uint16())
+	if unitType <= len(classTable)+100 {
+		if unitType >= 100 {
+			logUniRd.Debugf("UnitType: %d", unitType)
+			start := c.pos
+			unit := createUnitByClassType(classTable[unitType-100], c)
+			size := c.pos - start
+			numWp := -1
+			hu, ok := unit.(HasUnit)
+			if ok {
+				numWp = len(hu.GetUnit().Waypoints)
+			}
+			if numWp > 20 || size > 2000 {
+				logUniRd.Warnf("Unit size: %d, waypoints: %d", size, numWp)
+			}
+			return unit
+		} else if unitType > 3707 { // TODO: ergibt wenig Sinn, ist aber im Original so
+			logUniRd.Debugf("UnitType strange:", unitType)
+			return createUnitByClassType(classTable[3607], c)
+		} else {
+			logUniRd.Debugf("UnitType 430")
+			return createUnitByClassType(classTable[430], c)
+		}
+	}
+	return nil
+}
+
+func createUnitByClassType(classType *CT, c *Cursor) any {
+	switch classType.Domain {
+	case DomainAir:
+		switch classType.Type {
+		case TypeFlight:
+			logUniRd.Debugf("Reading flight")
+			return readFlight(c)
+		case TypePackage:
+			logUniRd.Debugf("Reading package")
+			return readPackage(c)
+		case TypeSquadron:
+			logUniRd.Debugf("Reading squadron")
+			return readSquadron(c)
+		}
+
+	case DomainLand:
+		switch classType.Type {
+		case TypeBattalion:
+			fmt.Println("Battalion not impl")
+			return nil //readBattalion(c)
+		case TypeBrigade:
+			fmt.Println("Brigade not impl")
+			return nil //readBrigade(c)
+		}
+
+	case DomainSea:
+		switch classType.Type {
+		case TypeTaskForce:
+			fmt.Println("TaskForce not impl")
+			return nil //readTaskForce(c)
+		}
+	}
+	return nil
 }
 
 func readVU_ID(c *Cursor) VU_ID {
