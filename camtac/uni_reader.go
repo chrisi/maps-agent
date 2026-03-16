@@ -1,7 +1,6 @@
 package camtac
 
 import (
-	"fmt"
 	"maps-agent/util"
 	"os"
 )
@@ -83,10 +82,10 @@ func createUnit(classTable []*CT, c *Cursor) any {
 			}
 			return unit
 		} else if unitType > 3707 { // TODO: ergibt wenig Sinn, ist aber im Original so
-			logUniRd.Debugf("UnitType strange:", unitType)
+			logUniRd.Warnf("UnitType strange:", unitType)
 			return createUnitByClassType(classTable[3607], c)
 		} else {
-			logUniRd.Debugf("UnitType 430")
+			logUniRd.Warnf("UnitType 430")
 			return createUnitByClassType(classTable[430], c)
 		}
 	}
@@ -121,10 +120,11 @@ func createUnitByClassType(classType *CT, c *Cursor) any {
 	case DomainSea:
 		switch classType.Type {
 		case TypeTaskForce:
-			fmt.Println("TaskForce not impl")
-			return nil //readTaskForce(c)
+			logUniRd.Debugf("Reading task-force")
+			return readTaskForce(c)
 		}
 	}
+	logUniRd.Warnf("Unknown unit type: %d", classType.Type)
 	return nil
 }
 
@@ -337,6 +337,14 @@ func readGroundUnit(c *Cursor) GroundUnit {
 		Orders:   c.Uint8(),
 		Division: c.Uint16(),
 		AObj:     readVU_ID(c),
+	}
+}
+
+func readTaskForce(c *Cursor) TaskForce {
+	return TaskForce{
+		Unit:   readUnit(c),
+		Orders: c.Uint8(),
+		Supply: c.Uint8(),
 	}
 }
 

@@ -106,6 +106,12 @@ type Unit struct {
 	Waypoints     []Waypoint   `json:"waypoints"`
 }
 
+type TaskForce struct {
+	Unit   Unit  `json:"unit"`
+	Orders uint8 `json:"orders"`
+	Supply uint8 `json:"supply"`
+}
+
 type GroundUnit struct {
 	Unit     Unit   `json:"unit"`
 	Orders   uint8  `json:"orders"`
