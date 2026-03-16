@@ -1,16 +1,5 @@
 package camtac
 
-//type VuClassHierarchy int
-//
-//const (
-//	VuDomain VuClassHierarchy = 0
-//	VuClass  VuClassHierarchy = 1
-//	VuType   VuClassHierarchy = 2
-//	VuSType  VuClassHierarchy = 3
-//	VuSPType VuClassHierarchy = 4
-//	VuOwner  VuClassHierarchy = 5
-//)
-
 const (
 	DomainAbstract    = 1
 	DomainAir         = 2
@@ -57,6 +46,34 @@ type CampaignBase struct {
 	BaseFlags  uint16  `json:"baseFlags"`
 	Owner      uint8   `json:"owner"`
 	CampID     uint16  `json:"campId"`
+}
+
+type CampObjectiveLinkDataType struct {
+	Costs [8]uint8 `json:"costs"`
+	ID    VU_ID    `json:"id"`
+}
+
+type Objective struct {
+	CampaignBase CampaignBase                `json:"campaignBase"`
+	LastRepair   uint32                      `json:"lastRepair"`
+	ObjFlags     uint32                      `json:"objFlags"`
+	Supply       uint8                       `json:"supply"`
+	Fuel         uint8                       `json:"fuel"`
+	Losses       uint8                       `json:"losses"`
+	NumStatuses  uint8                       `json:"numStatuses"`
+	Statuses     []uint8                     `json:"statuses"`
+	Priority     uint8                       `json:"priority"`
+	NameID       uint16                      `json:"nameId"`
+	ParentID     VU_ID                       `json:"parentId"`
+	FirstOwner   uint8                       `json:"firstOwner"`
+	NumLinks     uint8                       `json:"numLinks"`
+	Links        []CampObjectiveLinkDataType `json:"links"`
+	HasRadarData uint8                       `json:"hasRadarData"`
+	PosX         float64                     `json:"posX"`
+	PosY         float64                     `json:"posY"`
+	PosZ         float64                     `json:"posZ"`
+	Heading      float32                     `json:"heading"`
+	CampName     [80]byte                    `json:"campName"`
 }
 
 type Target struct {

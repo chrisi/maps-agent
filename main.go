@@ -6,13 +6,11 @@ import (
 	"flag"
 	"log"
 	"maps-agent/camtac"
-	"maps-agent/util"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -24,10 +22,10 @@ import (
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
-	defaultPath := `C:\Progam Files\Falcon BMS 4.38`
-	defaultCallsign := `Viper`
+	defaultFalconBase := "C:/Progam Files/Falcon BMS 4.38"
+	defaultCallsign := "Viper"
 	readCamtac := flag.Bool("camtac", false, "Read TAM/TAC files")
-	configPath := flag.String("path", defaultPath, "Falcon BMS directory")
+	falconBase := flag.String("path", defaultFalconBase, "Falcon BMS directory")
 	imcs := flag.Bool("imcs", false, "Establish IMCS connection")
 	imcsServer := flag.String("imcs-server", "wss://collab.falcon-bms.com:443", "IMCS Server the client should connect to")
 	imcsSession := flag.String("imcs-session", "47DF", "IMCS Session the client should connect to")
@@ -37,85 +35,20 @@ func main() {
 	addr := flag.String("addr", ":8080", "HTTP service address")
 	flag.Parse()
 
-	logBdRed := util.NewLogger("FileBundleReader", os.Stdout, util.Info, true)
-
 	if *readCamtac {
 		filename := "mc-test-campaing.cam"
 		//filename := "te_1_flight.tac"
 		//filename := "bata_1.tac"
 
-		dataBase := "c:/projects/Skunkworks/cam-tac-files"
-		falconBase := "c:/apps/Falcon BMS 4.38/Data"
-		campaignBase := falconBase + "/Campaign"
-		ctFile := falconBase + "/TerrData/Objects/Falcon4_CT.xml"
-
-		logBdRed.Infof("Creating ClassTable")
-		records, err := camtac.LoadCTRecords(ctFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		cts := camtac.CreateClassTable(records)
-		logBdRed.Debugf("ClassTypes: %d", len(cts))
-
-		logBdRed.Infof("Reading table of content")
-		reader, err := camtac.NewFileBundleReaderFromFile(campaignBase + "/" + filename)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		files, err := reader.GetEmbeddedFileDirectory()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		for _, f := range files {
-			logBdRed.Debugf("Name: %s, Offset: %d,  Size: %d", f.FileName, f.FileOffset, f.FileSizeBytes)
-		}
-
-		fileNoExt := strings.TrimSuffix(filename, filepath.Ext(filename))
-		data, err := reader.GetEmbeddedFileContents(fileNoExt + ".uni")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		unitReader := camtac.NewUnitReader(cts)
-		units := unitReader.ReadUniFile(data)
-		unitCounts := unitReader.Counts()
-
-		logBdRed.Infof("Num Units:       %d", unitCounts.NumUnits)
-		logBdRed.Infof("Num Squadrons:   %d", unitCounts.NumSquadrons)
-		logBdRed.Infof("Num Packages:    %d", unitCounts.NumPackages)
-		logBdRed.Infof("Num Flights:     %d", unitCounts.NumFlights)
-		logBdRed.Infof("Num Brigades:    %d", unitCounts.NumBrigades)
-		logBdRed.Infof("Num Battalions:  %d", unitCounts.NumBattalions)
-		logBdRed.Infof("Num Task Forces: %d", unitCounts.NumTaskForces)
-
-		err = camtac.WriteUnitsToJSON(units, dataBase+"/"+fileNoExt+"_units.json")
-		if err != nil {
-			logBdRed.Errorf("error writing units to JSON: %v", err)
-		}
+		camtac.ReadMission(*falconBase, filename, "c:/projects/Skunkworks/cam-tac-files")
 
 		os.Exit(0)
 	}
 
-	//writer := camtac.NewF4CampaignFileBundleWriter()
-	//
-	//if err := writer.AddFile("mission.txt", []byte("hello world")); err != nil {
-	//	log.Fatal(err)
-	//}
-	//
-	//if err := writer.AddFile("config.bin", []byte{0x01, 0x02, 0x03, 0x04}); err != nil {
-	//	log.Fatal(err)
-	//}
-	//
-	//if err := writer.Save("example.cam"); err != nil {
-	//	log.Fatal(err)
-	//}
-
 	fsCheckFreq, _ := strconv.Atoi(*fsCheckFreqStr)
 	posUpdateFreq, _ := strconv.Atoi(*posUpdateFreqStr)
 
-	fullPath := filepath.Join(*configPath, `User\Config`, *callsign+".ini")
+	fullPath := filepath.Join(*falconBase, `User\Config`, *callsign+".ini")
 
 	hub := newHub()
 	go hub.run()
