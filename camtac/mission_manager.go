@@ -56,16 +56,7 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 	campaignBase := m.falconBase + "/Data/Campaign"
 
 	m.loadClassTable()
-	objectiveBundle := m.loadBundle(campaignBase + "/Te_New.tac") // TODO: read from campaign scenario
 	missionBundle := m.loadBundle(campaignBase + "/" + missionFilename)
-
-	objectiveData, err := objectiveBundle.GetEmbeddedFileContentsByType(ObjectiveType)
-	if err != nil {
-		log.Fatal(err)
-	}
-	objectiveReader := NewObjectiveReader()
-	objectives := objectiveReader.ReadObjFile(objectiveData)
-	logBdRed.Infof("Num Objectives: %d", len(objectives))
 
 	deltaData, err := missionBundle.GetEmbeddedFileContentsByType(ObjectiveDeltaType)
 	if err != nil {
@@ -74,6 +65,19 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 	deltaReader := NewObjectiveDeltaReader()
 	deltas := deltaReader.ReadObdFile(deltaData)
 	logBdRed.Infof("Num Deltas: %d", len(deltas))
+
+	campaignData, err := missionBundle.GetEmbeddedFileContentsByType(CampaignType)
+	if err != nil {
+		log.Fatal(err)
+	}
+	campaignReader := NewCampaignReader()
+	campaign, err := campaignReader.ReadCmpFile(campaignData)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	logBdRed.Infof("Theater: %s", campaign.TheaterName)
+	logBdRed.Infof("Scenario: %s", campaign.Scenario)
 
 	unitData, err := missionBundle.GetEmbeddedFileContentsByType(UnitType)
 	if err != nil {
@@ -90,6 +94,18 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 	logBdRed.Infof("Num Brigades:    %d", unitCounts.NumBrigades)
 	logBdRed.Infof("Num Battalions:  %d", unitCounts.NumBattalions)
 	logBdRed.Infof("Num Task Forces: %d", unitCounts.NumTaskForces)
+
+	baseMission := campaign.Scenario + filepath.Ext(missionFilename)
+	logBdRed.Infof("Base Mission: %s", baseMission)
+
+	objectiveBundle := m.loadBundle(campaignBase + "/" + baseMission)
+	objectiveData, err := objectiveBundle.GetEmbeddedFileContentsByType(ObjectiveType)
+	if err != nil {
+		log.Fatal(err)
+	}
+	objectiveReader := NewObjectiveReader()
+	objectives := objectiveReader.ReadObjFile(objectiveData)
+	logBdRed.Infof("Num Objectives: %d", len(objectives))
 
 	fileNoExt := strings.TrimSuffix(missionFilename, filepath.Ext(missionFilename))
 	err = WriteToJSON(units, outputBase+"/"+fileNoExt+"_units.json")

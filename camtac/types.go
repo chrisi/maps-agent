@@ -274,3 +274,98 @@ type Package struct {
 	// Present if ((Unit.UnitFlags & 0x100000) != 0) && WaitCycles == 0
 	MissionRequest *MissionRequest `json:"missionRequest,omitzero"`
 }
+
+type TeamBasicInfo struct {
+	TeamFlag       uint8  `json:"teamFlag"`
+	TeamColor      uint8  `json:"teamColor"`
+	TeamName       string `json:"teamName"`
+	TeamMottoBytes string `json:"teamMottoBytes"`
+}
+
+type SquadInfo struct {
+	X                float32 `json:"x"`
+	Y                float32 `json:"y"`
+	ID               VU_ID   `json:"id"`
+	DescriptionIndex uint16  `json:"descriptionIndex"`
+	NameID           uint16  `json:"nameId"`
+	AirbaseIcon      uint16  `json:"airbaseIcon"`
+	SquadronPatch    uint16  `json:"squadronPatch"`
+	Speciality       uint8   `json:"speciality"`
+	CurrentStrength  uint8   `json:"currentStrength"`
+	Country          uint8   `json:"country"`
+	AirbaseName      string  `json:"airbaseName"`
+	Flags            uint32  `json:"flags"`
+	CampID           uint16  `json:"campId"`
+	TexSet           uint16  `json:"texSet"`
+	Padd             uint8   `json:"padd"`
+	SquadronName     string  `json:"squadronName"`
+}
+
+type Event struct {
+	X       uint16    `json:"x"`
+	Y       uint16    `json:"y"`
+	Time    uint32    `json:"time"`
+	Flags   uint8     `json:"flags"`
+	Team    uint8     `json:"team"`
+	Padd    [10]uint8 `json:"padd"`
+	TextLen uint16    `json:"textLen"`
+	Text    string    `json:"text"`
+}
+
+type Campaign struct {
+	CurrentTime           uint32           `json:"currentTime"`
+	TeStartTime           uint32           `json:"teStartTime"`
+	TeTimeLimit           uint32           `json:"teTimeLimit"`
+	VictoryPoints         uint32           `json:"victoryPoints"`
+	TeType                uint32           `json:"teType"`
+	TeNumberTeams         uint32           `json:"teNumberTeams"`
+	TeNumberAircraft      [8]uint32        `json:"teNumberAircraft"`
+	TeNumberF16           [8]uint32        `json:"teNumberF16"`
+	TeTeam                uint32           `json:"teTeam"`
+	TeTeamPts             [8]uint32        `json:"teTeamPts"`
+	TeFlags               uint32           `json:"teFlags"`
+	Info                  [8]TeamBasicInfo `json:"info"`
+	LastMajorEvent        uint32           `json:"lastMajorEvent"`
+	LastResupply          uint32           `json:"lastResupply"`
+	LastRepair            uint32           `json:"lastRepair"`
+	LastReinforcement     uint32           `json:"lastReinforcement"`
+	Timestamp             uint16           `json:"timestamp"`
+	Group                 uint16           `json:"group"`
+	GroundRatio           uint16           `json:"groundRatio"`
+	AirRatio              uint16           `json:"airRatio"`
+	AirDefenseRatio       uint16           `json:"airDefenseRatio"`
+	NavalRatio            uint16           `json:"navalRatio"`
+	Brief                 uint16           `json:"brief"`
+	TheaterSizeX          uint16           `json:"theaterSizeX"`
+	TheaterSizeY          uint16           `json:"theaterSizeY"`
+	CurrentDay            uint8            `json:"currentDay"`
+	ActiveTeams           uint8            `json:"activeTeams"`
+	DayZero               uint8            `json:"dayZero"`
+	EndgameResult         uint8            `json:"endgameResult"`
+	Situation             uint8            `json:"situation"`
+	EnemyAirExp           uint8            `json:"enemyAirExp"`
+	EnemyADExp            uint8            `json:"enemyADExp"`
+	BullseyeName          uint8            `json:"bullseyeName"`
+	BullseyeX             uint16           `json:"bullseyeX"`
+	BullseyeY             uint16           `json:"bullseyeY"`
+	TheaterName           string           `json:"theaterName"`
+	Scenario              string           `json:"scenario"`
+	SaveFile              string           `json:"saveFile"`
+	UiName                string           `json:"uiName"`
+	SquadronID            VU_ID            `json:"squadronId"`
+	NumRecentEvents       uint16           `json:"numRecentEvents"`
+	RecentEvents          []Event          `json:"recentEvents"`
+	NumPriorityEvents     uint16           `json:"numPriorityEvents"`
+	PriorityEvents        []Event          `json:"priorityEvents"`
+	CampMapSize           uint16           `json:"campMapSize"`
+	CampMap               []uint8          `json:"campMap"`
+	LastIndexNo           uint16           `json:"lastIndexNo"`
+	NumAvailableSquadrons uint16           `json:"numAvailableSquadrons"`
+	Squadrons             []SquadInfo      `json:"squadrons"`
+	Tempo                 uint8            `json:"tempo"`
+	CreatorIP             uint32           `json:"creatorIP"`
+	CreationTime          uint32           `json:"creationTime"`
+	CreationRand          uint32           `json:"creationRand"`
+	CampPeriodStart       uint16           `json:"campPeriodStart"`
+	CampPeriodEnd         uint16           `json:"campPeriodEnd"`
+}
