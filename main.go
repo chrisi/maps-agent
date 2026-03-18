@@ -163,13 +163,13 @@ func main() {
 		c.JSON(http.StatusOK, read)
 	})
 
-	r.GET("/mission/airbases", func(c *gin.Context) {
-		read := minimizeObjectives(manager.GetObjectivesByType(camtac.TypeAirbase))
+	r.GET("/mission/stations", func(c *gin.Context) {
+		read := minimizeObjectives(manager.GetObjectivesByTypes([]int{camtac.TypeAirbase, camtac.TypeAirstrip, camtac.TypeNavBeacon}))
 		c.JSON(http.StatusOK, read)
 	})
 
 	r.GET("/mission/factories", func(c *gin.Context) {
-		read := minimizeObjectives(manager.GetObjectivesByType(camtac.TypeFactory))
+		read := minimizeObjectives(manager.GetObjectivesByTypes([]int{camtac.TypeFactory}))
 		c.JSON(http.StatusOK, read)
 	})
 

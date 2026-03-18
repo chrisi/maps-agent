@@ -52,3 +52,12 @@ func WriteToJSON(data any, filename string) error {
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(data)
 }
+
+func Contains[T comparable](a []T, x T) bool {
+	for _, n := range a {
+		if x == n {
+			return true
+		}
+	}
+	return false
+}

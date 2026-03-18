@@ -173,13 +173,13 @@ func (m *MissionManager) applyDeltas() {
 	}
 }
 
-func (m *MissionManager) GetObjectivesByType(objectType int) []*Objective {
+func (m *MissionManager) GetObjectivesByTypes(objectTypes []int) []*Objective {
 	result := make([]*Objective, 0)
 	for _, obj := range m.objectives {
 		if obj == nil || obj.ClassType == nil {
 			continue
 		}
-		if obj.ClassType.Type == objectType {
+		if Contains(objectTypes, obj.ClassType.Type) {
 			result = append(result, obj)
 		}
 	}
