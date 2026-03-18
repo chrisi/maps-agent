@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -24,7 +25,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	defaultFalconBase := "C:/Progam Files/Falcon BMS 4.38"
 	defaultCallsign := "Viper"
-	readCamtac := flag.Bool("camtac", false, "Read TAM/TAC files")
+
 	falconBase := flag.String("path", defaultFalconBase, "Falcon BMS directory")
 	imcs := flag.Bool("imcs", false, "Establish IMCS connection")
 	imcsServer := flag.String("imcs-server", "wss://collab.falcon-bms.com:443", "IMCS Server the client should connect to")
@@ -33,17 +34,19 @@ func main() {
 	fsCheckFreqStr := flag.String("fs-check-freq", "1000", "Milliseconds between checking file system for changes")
 	posUpdateFreqStr := flag.String("pos-update-freq", "250", "Milliseconds between sending position updates")
 	addr := flag.String("addr", ":8080", "HTTP service address")
+
+	missionFilename := flag.String("mission-load", "", "Read CAM/TAC file")
+	exportJsonDir := flag.String("mission-export", "", "Export mission data to directory")
+
 	flag.Parse()
 
-	if *readCamtac {
-		filename := "mc-test-campaing.cam"
-		//filename := "te_1_flight.tac"
-		//filename := "bata_1.tac"
-
-		manager := camtac.NewMissionManager(*falconBase)
-		manager.ReadMission(filename, "c:/projects/Skunkworks/cam-tac-files")
-
-		os.Exit(0)
+	manager := camtac.NewMissionManager(*falconBase)
+	if *missionFilename != "" {
+		manager.ReadMission(*missionFilename)
+		if *exportJsonDir != "" {
+			fileNoExt := strings.TrimSuffix(*missionFilename, filepath.Ext(*missionFilename))
+			manager.OutputJson(*exportJsonDir, fileNoExt)
+		}
 	}
 
 	fsCheckFreq, _ := strconv.Atoi(*fsCheckFreqStr)

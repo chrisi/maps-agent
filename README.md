@@ -31,8 +31,12 @@ Usage of maps-agent.exe:
     	IMCS Server the client should connect to (default "wss://collab.falcon-bms.com:443")
   -imcs-session string
     	IMCS Session the client should connect to (default "47DF")
+  -mission-export string
+    	Export mission data to directory
+  -mission-load string
+    	Read CAM/TAC file
   -path string
-    	Falcon BMS directory (default "C:\\Progam Files\\Falcon BMS 4.38")
+    	Falcon BMS directory (default "C:/Progam Files/Falcon BMS 4.38")
   -pos-update-freq string
     	Milliseconds between sending position updates (default "250")
 ```
@@ -40,5 +44,5 @@ Usage of maps-agent.exe:
 ### Start
 
 ```
-maps-agent.exe --path="C:\apps\Falcon BMS 4.38" --callsign="Joker"
+maps-agent.exe --path="C:\apps\Falcon BMS 4.38" --callsign="Joker" --mission-load="mc-test.cam"
 ```

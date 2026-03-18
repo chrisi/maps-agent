@@ -5,12 +5,30 @@ import (
 	"maps-agent/util"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
-var logBdRed = util.NewLogger("FileBundleReader", os.Stdout, util.Info, true)
+var debuglog = util.NewLogger("Debug", os.Stdout, util.Info, true)
+
+func logChanges(obj *Objective, delta *ObjectiveDeltas) {
+	if obj.LastRepair != delta.LastRepair {
+		debuglog.Debugf("Objective %d: LastRepair %d -> %d", obj.CampaignBase.ID.Num, obj.LastRepair, delta.LastRepair)
+	}
+	if obj.FirstOwner != delta.Owner {
+		debuglog.Debugf("Objective %d: FirstOwner %d -> %d", obj.CampaignBase.ID.Num, obj.FirstOwner, delta.Owner)
+	}
+	if obj.Supply != delta.Supply {
+		debuglog.Debugf("Objective %d: Supply %d -> %d", obj.CampaignBase.ID.Num, obj.Supply, delta.Supply)
+	}
+	if obj.Fuel != delta.Fuel {
+		debuglog.Debugf("Objective %d: Fuel %d -> %d", obj.CampaignBase.ID.Num, obj.Fuel, delta.Fuel)
+	}
+	if obj.Losses != delta.Losses {
+		debuglog.Debugf("Objective %d: Losses %d -> %d", obj.CampaignBase.ID.Num, obj.Losses, delta.Losses)
+	}
+}
 
 type MissionManager struct {
+	log        *util.Logger
 	falconBase string
 	classTable []*SCT
 	objectives []*Objective
@@ -18,8 +36,97 @@ type MissionManager struct {
 	units      []*any
 }
 
+func NewMissionManager(falconBase string) *MissionManager {
+	return &MissionManager{
+		log:        util.NewLogger("Mission Manager", os.Stdout, util.Info, true),
+		falconBase: falconBase,
+	}
+}
+
+func (m *MissionManager) ReadMission(missionFilename string) {
+	m.log.Infof("Reading mission %s", missionFilename)
+
+	campaignBase := m.falconBase + "/Data/Campaign"
+
+	m.loadClassTable()
+	missionBundle := m.loadBundle(campaignBase + "/" + missionFilename)
+
+	deltaData, err := missionBundle.GetEmbeddedFileContentsByType(ObjectiveDeltaType)
+	if err != nil {
+		log.Fatal(err)
+	}
+	deltaReader := NewObjectiveDeltaReader()
+	m.deltas = deltaReader.ReadObdFile(deltaData)
+	m.log.Infof("Num Deltas: %d", len(m.deltas))
+
+	campaignData, err := missionBundle.GetEmbeddedFileContentsByType(CampaignType)
+	if err != nil {
+		log.Fatal(err)
+	}
+	campaignReader := NewCampaignReader()
+	campaign, err := campaignReader.ReadCmpFile(campaignData)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	m.log.Infof("Theater: %s", campaign.TheaterName)
+	m.log.Infof("Scenario: %s", campaign.Scenario)
+
+	unitData, err := missionBundle.GetEmbeddedFileContentsByType(UnitType)
+	if err != nil {
+		log.Fatal(err)
+	}
+	unitReader := NewUnitReader(m.classTable)
+	m.units = unitReader.ReadUniFile(unitData)
+
+	unitCounts := unitReader.Counts()
+	m.log.Debugf("Num Units:       %d", unitCounts.NumUnits)
+	m.log.Debugf("Num Squadrons:   %d", unitCounts.NumSquadrons)
+	m.log.Debugf("Num Packages:    %d", unitCounts.NumPackages)
+	m.log.Debugf("Num Flights:     %d", unitCounts.NumFlights)
+	m.log.Debugf("Num Brigades:    %d", unitCounts.NumBrigades)
+	m.log.Debugf("Num Battalions:  %d", unitCounts.NumBattalions)
+	m.log.Debugf("Num Task Forces: %d", unitCounts.NumTaskForces)
+
+	baseMission := campaign.Scenario + filepath.Ext(missionFilename)
+	m.log.Infof("Base Mission: %s", baseMission)
+
+	objectiveBundle := m.loadBundle(campaignBase + "/" + baseMission)
+	objectiveData, err := objectiveBundle.GetEmbeddedFileContentsByType(ObjectiveType)
+	if err != nil {
+		log.Fatal(err)
+	}
+	objectiveReader := NewObjectiveReader(m.classTable)
+	m.objectives = objectiveReader.ReadObjFile(objectiveData)
+	m.log.Infof("Num Objectives: %d", len(m.objectives))
+
+	m.applyDeltas()
+}
+
+func (m *MissionManager) OutputJson(outputBase string, outputFilePrefix string) {
+	m.log.Infof("Writing json data to %s/%s_*.json", outputBase, outputFilePrefix)
+	err := WriteToJSON(m.units, outputBase+"/"+outputFilePrefix+"_units.json")
+	if err != nil {
+		m.log.Errorf("error writing units to JSON: %v", err)
+	}
+	err = WriteToJSON(m.objectives, outputBase+"/"+outputFilePrefix+"_objectives.json")
+	if err != nil {
+		m.log.Errorf("error writing objectives to JSON: %v", err)
+	}
+	err = WriteToJSON(m.deltas, outputBase+"/"+outputFilePrefix+"_deltas.json")
+	if err != nil {
+		m.log.Errorf("error writing deltas to JSON: %v", err)
+	}
+
+	objectiveTree := buildObjectiveTree(m.objectives)
+	err = WriteToJSON(objectiveTree, outputBase+"/"+outputFilePrefix+"_objective_tree.json")
+	if err != nil {
+		m.log.Errorf("error writing deltas to JSON: %v", err)
+	}
+}
+
 func (m *MissionManager) loadClassTable() {
-	logBdRed.Infof("Loading ClassTable")
+	m.log.Infof("Loading ClassTable")
 	if m.classTable != nil {
 		return
 	}
@@ -28,11 +135,11 @@ func (m *MissionManager) loadClassTable() {
 		log.Fatal(err)
 	}
 	m.classTable = CreateStrippedClassTable(records)
-	logBdRed.Infof("ClassTypes: %d", len(m.classTable))
+	m.log.Infof("ClassTypes: %d", len(m.classTable))
 }
 
 func (m *MissionManager) loadBundle(filename string) *FileBundleReader {
-	logBdRed.Infof("Reading table of content of %s", filename)
+	m.log.Infof("Reading table of content of %s", filename)
 	reader, err := NewFileBundleReaderFromFile(filename)
 	if err != nil {
 		log.Fatal(err)
@@ -42,35 +149,13 @@ func (m *MissionManager) loadBundle(filename string) *FileBundleReader {
 		log.Fatal(err)
 	}
 	for _, f := range files {
-		logBdRed.Debugf("Name: %s, Offset: %d,  Size: %d", f.FileName, f.FileOffset, f.FileSizeBytes)
+		m.log.Debugf("Name: %s, Offset: %d,  Size: %d", f.FileName, f.FileOffset, f.FileSizeBytes)
 	}
 	return reader
 }
 
-func (m *MissionManager) outputJson(outputBase string, outputFilePrefix string) {
-	logBdRed.Infof("Writing json data to %s/%s_*.json", outputBase, outputFilePrefix)
-	err := WriteToJSON(m.units, outputBase+"/"+outputFilePrefix+"_units.json")
-	if err != nil {
-		logBdRed.Errorf("error writing units to JSON: %v", err)
-	}
-	err = WriteToJSON(m.objectives, outputBase+"/"+outputFilePrefix+"_objectives.json")
-	if err != nil {
-		logBdRed.Errorf("error writing objectives to JSON: %v", err)
-	}
-	err = WriteToJSON(m.deltas, outputBase+"/"+outputFilePrefix+"_deltas.json")
-	if err != nil {
-		logBdRed.Errorf("error writing deltas to JSON: %v", err)
-	}
-
-	objectiveTree := buildObjectiveTree(m.objectives)
-	err = WriteToJSON(objectiveTree, outputBase+"/"+outputFilePrefix+"_objective_tree.json")
-	if err != nil {
-		logBdRed.Errorf("error writing deltas to JSON: %v", err)
-	}
-}
-
 func (m *MissionManager) applyDeltas() {
-	logBdRed.Infof("Applying deltas to objectives")
+	m.log.Infof("Applying deltas to objectives")
 	deltaByID := make(map[uint32]*ObjectiveDeltas, len(m.deltas))
 	for _, delta := range m.deltas {
 		deltaByID[delta.ID.Num] = delta
@@ -88,91 +173,17 @@ func (m *MissionManager) applyDeltas() {
 	}
 }
 
-func logChanges(obj *Objective, delta *ObjectiveDeltas) {
-	if obj.LastRepair != delta.LastRepair {
-		logBdRed.Debugf("Objective %d: LastRepair %d -> %d", obj.CampaignBase.ID.Num, obj.LastRepair, delta.LastRepair)
+func (m *MissionManager) getAllByType(objectType int) []*Objective {
+	result := make([]*Objective, 0)
+	for _, obj := range m.objectives {
+		if obj == nil || obj.ClassType == nil {
+			continue
+		}
+		if obj.ClassType.Type == objectType {
+			result = append(result, obj)
+		}
 	}
-	if obj.FirstOwner != delta.Owner {
-		logBdRed.Debugf("Objective %d: FirstOwner %d -> %d", obj.CampaignBase.ID.Num, obj.FirstOwner, delta.Owner)
-	}
-	if obj.Supply != delta.Supply {
-		logBdRed.Debugf("Objective %d: Supply %d -> %d", obj.CampaignBase.ID.Num, obj.Supply, delta.Supply)
-	}
-	if obj.Fuel != delta.Fuel {
-		logBdRed.Debugf("Objective %d: Fuel %d -> %d", obj.CampaignBase.ID.Num, obj.Fuel, delta.Fuel)
-	}
-	if obj.Losses != delta.Losses {
-		logBdRed.Debugf("Objective %d: Losses %d -> %d", obj.CampaignBase.ID.Num, obj.Losses, delta.Losses)
-	}
-}
-
-func NewMissionManager(falconBase string) *MissionManager {
-	return &MissionManager{
-		falconBase: falconBase,
-	}
-}
-
-func (m *MissionManager) ReadMission(missionFilename string, outputBase string) {
-	logBdRed.Infof("Reading mission %s", missionFilename)
-
-	campaignBase := m.falconBase + "/Data/Campaign"
-
-	m.loadClassTable()
-	missionBundle := m.loadBundle(campaignBase + "/" + missionFilename)
-
-	deltaData, err := missionBundle.GetEmbeddedFileContentsByType(ObjectiveDeltaType)
-	if err != nil {
-		log.Fatal(err)
-	}
-	deltaReader := NewObjectiveDeltaReader()
-	m.deltas = deltaReader.ReadObdFile(deltaData)
-	logBdRed.Infof("Num Deltas: %d", len(m.deltas))
-
-	campaignData, err := missionBundle.GetEmbeddedFileContentsByType(CampaignType)
-	if err != nil {
-		log.Fatal(err)
-	}
-	campaignReader := NewCampaignReader()
-	campaign, err := campaignReader.ReadCmpFile(campaignData)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	logBdRed.Infof("Theater: %s", campaign.TheaterName)
-	logBdRed.Infof("Scenario: %s", campaign.Scenario)
-
-	unitData, err := missionBundle.GetEmbeddedFileContentsByType(UnitType)
-	if err != nil {
-		log.Fatal(err)
-	}
-	unitReader := NewUnitReader(m.classTable)
-	m.units = unitReader.ReadUniFile(unitData)
-
-	unitCounts := unitReader.Counts()
-	logBdRed.Infof("Num Units:       %d", unitCounts.NumUnits)
-	logBdRed.Infof("Num Squadrons:   %d", unitCounts.NumSquadrons)
-	logBdRed.Infof("Num Packages:    %d", unitCounts.NumPackages)
-	logBdRed.Infof("Num Flights:     %d", unitCounts.NumFlights)
-	logBdRed.Infof("Num Brigades:    %d", unitCounts.NumBrigades)
-	logBdRed.Infof("Num Battalions:  %d", unitCounts.NumBattalions)
-	logBdRed.Infof("Num Task Forces: %d", unitCounts.NumTaskForces)
-
-	baseMission := campaign.Scenario + filepath.Ext(missionFilename)
-	logBdRed.Infof("Base Mission: %s", baseMission)
-
-	objectiveBundle := m.loadBundle(campaignBase + "/" + baseMission)
-	objectiveData, err := objectiveBundle.GetEmbeddedFileContentsByType(ObjectiveType)
-	if err != nil {
-		log.Fatal(err)
-	}
-	objectiveReader := NewObjectiveReader(m.classTable)
-	m.objectives = objectiveReader.ReadObjFile(objectiveData)
-	logBdRed.Infof("Num Objectives: %d", len(m.objectives))
-
-	m.applyDeltas()
-
-	fileNoExt := strings.TrimSuffix(missionFilename, filepath.Ext(missionFilename))
-	m.outputJson(outputBase, fileNoExt)
+	return result
 }
 
 type ObjectiveNode struct {
