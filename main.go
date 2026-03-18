@@ -226,9 +226,10 @@ func minimizeObjective(objective *camtac.Objective) *Objective {
 		OcdIdx: objective.ClassType.EntityIdx,
 		Type:   objective.ClassType.Type,
 		Owner:  int(objective.CampaignBase.Owner),
-		Pos: Coord{
-			objective.PosX,
+		Pos: Point{
+			// swapped intentionally because of falcon
 			objective.PosY,
+			objective.PosX,
 		},
 	}
 }

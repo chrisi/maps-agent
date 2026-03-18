@@ -1,6 +1,6 @@
 package main
 
-type Coord struct {
+type Point struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 }
@@ -10,5 +10,5 @@ type Objective struct {
 	Owner  int    `json:"owner"`
 	OcdIdx int    `json:"ocdIdx"`
 	Type   int    `json:"type"`
-	Pos    Coord  `json:"pos"`
+	Pos    Point  `json:"pos"`
 }
