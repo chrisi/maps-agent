@@ -76,12 +76,12 @@ func (ur *UnitReader) readUnits(data []byte) []any {
 }
 
 func (ur *UnitReader) createUnit() any {
-	unitType := int(ur.c.Uint16())
-	if unitType <= len(ur.classTable)+100 {
-		if unitType >= 100 {
-			ur.log.Debugf("UnitType: %d", unitType)
+	entityType := int(ur.c.Uint16())
+	if entityType <= len(ur.classTable)+100 {
+		if entityType >= 100 {
+			ur.log.Debugf("UnitType: %d", entityType)
 			start := ur.c.pos
-			unit := ur.createUnitByClassType(ur.classTable[unitType-100])
+			unit := ur.createUnitByClassType(ur.classTable[entityType-100])
 			size := ur.c.pos - start
 			numWp := -1
 			hu, ok := unit.(HasUnit)
@@ -92,8 +92,8 @@ func (ur *UnitReader) createUnit() any {
 				ur.log.Warnf("Unit size: %d, waypoints: %d", size, numWp)
 			}
 			return unit
-		} else if unitType > 3707 { // TODO: ergibt wenig Sinn, ist aber im Original so
-			ur.log.Warnf("UnitType strange:", unitType)
+		} else if entityType > 3707 { // TODO: ergibt wenig Sinn, ist aber im Original so
+			ur.log.Warnf("UnitType strange:", entityType)
 			return ur.createUnitByClassType(ur.classTable[3607])
 		} else {
 			ur.log.Warnf("UnitType 430")
@@ -111,17 +111,23 @@ func (ur *UnitReader) createUnitByClassType(classType *CT) any {
 			ur.log.Debugf("Reading flight")
 			ur.counters.NumUnits++
 			ur.counters.NumFlights++
-			return readFlight(ur.c)
+			rec := readFlight(ur.c)
+			rec.Unit.TypeName = "Flight"
+			return rec
 		case TypePackage:
 			ur.log.Debugf("Reading package")
 			ur.counters.NumUnits++
 			ur.counters.NumPackages++
-			return readPackage(ur.c)
+			rec := readPackage(ur.c)
+			rec.Unit.TypeName = "Package"
+			return rec
 		case TypeSquadron:
 			ur.log.Debugf("Reading squadron")
 			ur.counters.NumUnits++
 			ur.counters.NumSquadrons++
-			return readSquadron(ur.c)
+			rec := readSquadron(ur.c)
+			rec.Unit.TypeName = "Squadron"
+			return rec
 		}
 
 	case DomainLand:
@@ -130,12 +136,16 @@ func (ur *UnitReader) createUnitByClassType(classType *CT) any {
 			ur.log.Debugf("Reading battalion")
 			ur.counters.NumUnits++
 			ur.counters.NumBattalions++
-			return readBattalion(ur.c)
+			rec := readBattalion(ur.c)
+			rec.GroundUnit.Unit.TypeName = "Battalion"
+			return rec
 		case TypeBrigade:
 			ur.log.Debugf("Reading brigade")
 			ur.counters.NumUnits++
 			ur.counters.NumBrigades++
-			return readBrigade(ur.c)
+			rec := readBrigade(ur.c)
+			rec.GroundUnit.Unit.TypeName = "Brigade"
+			return rec
 		}
 
 	case DomainSea:
@@ -144,7 +154,9 @@ func (ur *UnitReader) createUnitByClassType(classType *CT) any {
 			ur.log.Debugf("Reading task-force")
 			ur.counters.NumUnits++
 			ur.counters.NumTaskForces++
-			return readTaskForce(ur.c)
+			rec := readTaskForce(ur.c)
+			rec.Unit.TypeName = "TaskForce"
+			return rec
 		}
 	}
 	ur.log.Warnf("Unknown unit type: %d", classType.Type)

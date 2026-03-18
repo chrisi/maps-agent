@@ -1,29 +1,5 @@
 package camtac
 
-const (
-	DomainAbstract    = 1
-	DomainAir         = 2
-	DomainLand        = 3
-	DomainSea         = 4
-	DomainSpace       = 5
-	DomainUnderground = 6
-	DomainUndersea    = 7
-)
-
-const (
-	TypeNothing = 1
-	TypeATM     = 1
-
-	TypeFlight   = 1
-	TypePackage  = 2
-	TypeSquadron = 3
-
-	TypeBattalion = 1
-	TypeBrigade   = 2
-
-	TypeTaskForce = 1
-)
-
 type EmbeddedFileInfo struct {
 	FileName      string
 	FileOffset    uint32
@@ -117,6 +93,7 @@ type Waypoint struct {
 }
 
 type Unit struct {
+	TypeName      string       `json:"typeName"`
 	CampaignBase  CampaignBase `json:"campaignBase"`
 	LastCheck     uint32       `json:"lastCheck"`
 	Roster        int32        `json:"roster"`

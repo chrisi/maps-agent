@@ -25,7 +25,7 @@ func (m *MissionManager) loadClassTable() {
 		log.Fatal(err)
 	}
 	m.classTable = CreateClassTable(records)
-	logBdRed.Debugf("ClassTypes: %d", len(m.classTable))
+	logBdRed.Infof("ClassTypes: %d", len(m.classTable))
 }
 
 func (m *MissionManager) loadBundle(filename string) *FileBundleReader {

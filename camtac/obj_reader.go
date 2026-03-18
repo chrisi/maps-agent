@@ -41,7 +41,7 @@ func (or *ObjectiveReader) readAllObjectives(data []byte) []Objective {
 	c := NewCursor(data)
 	var objectives []Objective
 	for i := 0; i < or.numObjectives; i++ {
-		_ = int(c.Uint16()) // objectiveType (analog zu unitType)
+		_ = int(c.Uint16()) // entityType, also in squadron.entityType
 		obj := readObjective(c)
 		objectives = append(objectives, obj)
 	}
