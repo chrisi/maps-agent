@@ -163,6 +163,16 @@ func main() {
 		c.JSON(http.StatusOK, read)
 	})
 
+	r.GET("/mission/airbases", func(c *gin.Context) {
+		read := minimizeObjectives(manager.GetObjectivesByType(camtac.TypeAirbase))
+		c.JSON(http.StatusOK, read)
+	})
+
+	r.GET("/mission/factories", func(c *gin.Context) {
+		read := minimizeObjectives(manager.GetObjectivesByType(camtac.TypeFactory))
+		c.JSON(http.StatusOK, read)
+	})
+
 	r.GET("/ini", func(c *gin.Context) {
 		log.Printf("callsign.ini requested")
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
@@ -199,5 +209,26 @@ func main() {
 	log.Printf("callsign.ini file: %s", fullPath)
 	if err := r.Run(*addr); err != nil {
 		log.Fatalf("server failed: %v", err)
+	}
+}
+
+func minimizeObjectives(objectives []*camtac.Objective) []*Objective {
+	result := make([]*Objective, 0, len(objectives))
+	for _, obj := range objectives {
+		result = append(result, minimizeObjective(obj))
+	}
+	return result
+}
+
+func minimizeObjective(objective *camtac.Objective) *Objective {
+	return &Objective{
+		Name:   objective.CampName,
+		OcdIdx: objective.ClassType.EntityIdx,
+		Type:   objective.ClassType.Type,
+		Owner:  int(objective.CampaignBase.Owner),
+		Pos: Coord{
+			objective.PosX,
+			objective.PosY,
+		},
 	}
 }

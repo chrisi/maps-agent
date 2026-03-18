@@ -1,7 +1,14 @@
 package main
 
+type Coord struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
 type Objective struct {
-	Owner uint8   `json:"owner"`
-	PosX  float64 `json:"posX"`
-	PosY  float64 `json:"posY"`
+	Name   string `json:"name"`
+	Owner  int    `json:"owner"`
+	OcdIdx int    `json:"ocdIdx"`
+	Type   int    `json:"type"`
+	Pos    Coord  `json:"pos"`
 }
