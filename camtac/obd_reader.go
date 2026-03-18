@@ -49,17 +49,17 @@ func (or *ObjectiveDeltaReader) readAllObjectiveDeltas(data []byte) []ObjectiveD
 
 func readObjectiveDeltas(c *Cursor) ObjectiveDeltas {
 	d := ObjectiveDeltas{
-		ID:          readVU_ID(c),
-		LastRepair:  c.Uint32(),
-		Owner:       c.Uint8(),
-		Supply:      c.Uint8(),
-		Fuel:        c.Uint8(),
-		Losses:      c.Uint8(),
-		NumStatuses: c.Uint8(),
+		ID:         readVU_ID(c),
+		LastRepair: c.Uint32(),
+		Owner:      c.Uint8(),
+		Supply:     c.Uint8(),
+		Fuel:       c.Uint8(),
+		Losses:     c.Uint8(),
 	}
-	d.Statuses = make([]uint8, d.NumStatuses)
-	for i := range d.NumStatuses {
-		d.Statuses[i] = c.Uint8()
+	num := c.Uint8()
+	d.Statuses = make([]int, num)
+	for i := range num {
+		d.Statuses[i] = c.Int8()
 	}
 	return d
 }

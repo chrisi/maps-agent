@@ -12,7 +12,7 @@ var logBdRed = util.NewLogger("FileBundleReader", os.Stdout, util.Info, true)
 
 type MissionManager struct {
 	falconBase string
-	classTable []*CT
+	classTable []*SCT
 }
 
 func (m *MissionManager) loadClassTable() {
@@ -24,7 +24,7 @@ func (m *MissionManager) loadClassTable() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	m.classTable = CreateClassTable(records)
+	m.classTable = CreateStrippedClassTable(records)
 	logBdRed.Infof("ClassTypes: %d", len(m.classTable))
 }
 
@@ -103,7 +103,7 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 	if err != nil {
 		log.Fatal(err)
 	}
-	objectiveReader := NewObjectiveReader()
+	objectiveReader := NewObjectiveReader(m.classTable)
 	objectives := objectiveReader.ReadObjFile(objectiveData)
 	logBdRed.Infof("Num Objectives: %d", len(objectives))
 
@@ -120,4 +120,53 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 	if err != nil {
 		logBdRed.Errorf("error writing deltas to JSON: %v", err)
 	}
+
+	objectiveTree := BuildObjectiveTree(objectives)
+	err = WriteToJSON(objectiveTree, outputBase+"/"+fileNoExt+"_objective_tree.json")
+	if err != nil {
+		logBdRed.Errorf("error writing deltas to JSON: %v", err)
+	}
+}
+
+type ObjectiveNode struct {
+	Objective Objective
+	CampName  string
+	Children  []*ObjectiveNode
+}
+
+func BuildObjectiveTree(objectives []Objective) []*ObjectiveNode {
+	nodes := make(map[uint32]*ObjectiveNode, len(objectives))
+	roots := make([]*ObjectiveNode, 0)
+
+	// Erst alle Knoten anlegen
+	for i := range objectives {
+		obj := objectives[i]
+		id := obj.CampaignBase.ID.Num
+
+		nodes[id] = &ObjectiveNode{
+			Objective: obj,
+			CampName:  obj.CampName,
+			Children:  make([]*ObjectiveNode, 0),
+		}
+	}
+
+	// Dann Eltern-Kind-Beziehungen herstellen
+	for i := range objectives {
+		obj := objectives[i]
+		id := obj.CampaignBase.ID.Num
+		parentID := obj.ParentID.Num
+
+		node := nodes[id]
+
+		// Root, wenn kein Parent oder Parent nicht vorhanden
+		parent, ok := nodes[parentID]
+		if !ok || parentID == 0 || parentID == id {
+			roots = append(roots, node)
+			continue
+		}
+
+		parent.Children = append(parent.Children, node)
+	}
+
+	return roots
 }

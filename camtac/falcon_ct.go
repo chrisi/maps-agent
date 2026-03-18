@@ -7,6 +7,14 @@ type CTRecords struct {
 	CTs     []CT     `xml:"CT" json:"cts"`
 }
 
+type SCT struct {
+	Domain     int `xml:"Domain" json:"domain"`
+	Class      int `xml:"Class" json:"class"`
+	Type       int `xml:"Type" json:"type"`
+	EntityType int `xml:"EntityType" json:"entityType"`
+	EntityIdx  int `xml:"EntityIdx" json:"entityIdx"`
+}
+
 type CT struct {
 	Num                    int     `xml:"Num,attr" json:"num"`
 	Id                     int     `xml:"Id" json:"id"`

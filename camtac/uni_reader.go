@@ -16,14 +16,14 @@ type Counts struct {
 }
 
 type UnitReader struct {
-	classTable []*CT
+	classTable []*SCT
 	numUnits   int
 	counters   Counts
 	c          *Cursor
 	log        *util.Logger
 }
 
-func NewUnitReader(classTable []*CT) *UnitReader {
+func NewUnitReader(classTable []*SCT) *UnitReader {
 	return &UnitReader{
 		classTable: classTable,
 		log:        util.NewLogger("UNI-Reader", os.Stdout, util.Info, true),
@@ -58,30 +58,30 @@ func (ur *UnitReader) ReadUniFile(data []byte) []any {
 	ur.log.Debugf("Uncompressed size: %d", len(expanded))
 	ur.log.Infof("Units: %d", ur.numUnits)
 
-	return ur.readUnits(expanded)
+	return ur.readAllUnits(expanded)
 }
 
 func (ur *UnitReader) Counts() Counts {
 	return ur.counters
 }
 
-func (ur *UnitReader) readUnits(data []byte) []any {
+func (ur *UnitReader) readAllUnits(data []byte) []any {
 	ur.c = NewCursor(data)
 	var units []any
 	for i := 0; i < ur.numUnits; i++ {
-		unit := ur.createUnit()
+		unit := ur.readUnit()
 		units = append(units, unit)
 	}
 	return units
 }
 
-func (ur *UnitReader) createUnit() any {
+func (ur *UnitReader) readUnit() any {
 	entityType := int(ur.c.Uint16())
 	if entityType <= len(ur.classTable)+100 {
 		if entityType >= 100 {
 			ur.log.Debugf("UnitType: %d", entityType)
 			start := ur.c.pos
-			unit := ur.createUnitByClassType(ur.classTable[entityType-100])
+			unit := ur.readUnitByClassType(ur.classTable[entityType-100])
 			size := ur.c.pos - start
 			numWp := -1
 			hu, ok := unit.(HasUnit)
@@ -94,16 +94,16 @@ func (ur *UnitReader) createUnit() any {
 			return unit
 		} else if entityType > 3707 { // TODO: ergibt wenig Sinn, ist aber im Original so
 			ur.log.Warnf("UnitType strange:", entityType)
-			return ur.createUnitByClassType(ur.classTable[3607])
+			return ur.readUnitByClassType(ur.classTable[3607])
 		} else {
 			ur.log.Warnf("UnitType 430")
-			return ur.createUnitByClassType(ur.classTable[430])
+			return ur.readUnitByClassType(ur.classTable[430])
 		}
 	}
 	return nil
 }
 
-func (ur *UnitReader) createUnitByClassType(classType *CT) any {
+func (ur *UnitReader) readUnitByClassType(classType *SCT) any {
 	switch classType.Domain {
 	case DomainAir:
 		switch classType.Type {

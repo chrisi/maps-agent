@@ -30,22 +30,20 @@ type CampObjectiveLinkDataType struct {
 }
 
 type Objective struct {
+	ClassType    *SCT                        `json:"classType"`
 	CampaignBase CampaignBase                `json:"campaignBase"`
 	LastRepair   uint32                      `json:"lastRepair"`
 	ObjFlags     uint32                      `json:"objFlags"`
 	Supply       uint8                       `json:"supply"`
 	Fuel         uint8                       `json:"fuel"`
 	Losses       uint8                       `json:"losses"`
-	NumStatuses  uint8                       `json:"numStatuses"`
-	Statuses     []uint8                     `json:"statuses"`
+	Statuses     []int                       `json:"-"`
 	Priority     uint8                       `json:"priority"`
 	NameID       uint16                      `json:"nameId"`
 	ParentID     VU_ID                       `json:"parentId"`
 	FirstOwner   uint8                       `json:"firstOwner"`
-	NumLinks     uint8                       `json:"numLinks"`
-	Links        []CampObjectiveLinkDataType `json:"links"`
-	HasRadarData uint8                       `json:"hasRadarData"`
-	DetectRatios []float32                   `json:"detectRatios"`
+	Links        []CampObjectiveLinkDataType `json:"-"`
+	DetectRatios []float32                   `json:"-"`
 	PosX         float64                     `json:"posX"`
 	PosY         float64                     `json:"posY"`
 	PosZ         float64                     `json:"posZ"`
@@ -54,14 +52,13 @@ type Objective struct {
 }
 
 type ObjectiveDeltas struct {
-	ID          VU_ID   `json:"id"`
-	LastRepair  uint32  `json:"lastRepair"`
-	Owner       uint8   `json:"owner"`
-	Supply      uint8   `json:"supply"`
-	Fuel        uint8   `json:"fuel"`
-	Losses      uint8   `json:"losses"`
-	NumStatuses uint8   `json:"numStatuses"`
-	Statuses    []uint8 `json:"statuses"`
+	ID         VU_ID  `json:"id"`
+	LastRepair uint32 `json:"lastRepair"`
+	Owner      uint8  `json:"owner"`
+	Supply     uint8  `json:"supply"`
+	Fuel       uint8  `json:"fuel"`
+	Losses     uint8  `json:"losses"`
+	Statuses   []int  `json:"-"`
 }
 
 type Target struct {

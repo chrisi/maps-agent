@@ -6,13 +6,15 @@ import (
 )
 
 type ObjectiveReader struct {
+	classTable    []*SCT
 	numObjectives int
 	log           *util.Logger
 }
 
-func NewObjectiveReader() *ObjectiveReader {
+func NewObjectiveReader(classTable []*SCT) *ObjectiveReader {
 	return &ObjectiveReader{
-		log: util.NewLogger("OBJ-Reader", os.Stdout, util.Info, true),
+		classTable: classTable,
+		log:        util.NewLogger("OBJ-Reader", os.Stdout, util.Info, true),
 	}
 }
 
@@ -43,6 +45,7 @@ func (or *ObjectiveReader) readAllObjectives(data []byte) []Objective {
 	for i := 0; i < or.numObjectives; i++ {
 		_ = int(c.Uint16()) // entityType, also in squadron.entityType
 		obj := readObjective(c)
+		obj.ClassType = or.classTable[obj.CampaignBase.EntityType-100]
 		objectives = append(objectives, obj)
 	}
 	return objectives
@@ -65,27 +68,28 @@ func readObjective(c *Cursor) Objective {
 		Supply:       c.Uint8(),
 		Fuel:         c.Uint8(),
 		Losses:       c.Uint8(),
-		NumStatuses:  c.Uint8(),
 	}
-	o.Statuses = make([]uint8, o.NumStatuses)
-	for i := range o.NumStatuses {
-		o.Statuses[i] = c.Uint8()
+	ns := c.Uint8()
+	o.Statuses = make([]int, ns)
+	for i := range ns {
+		o.Statuses[i] = c.Int8()
 	}
 	o.Priority = c.Uint8()
 	o.NameID = c.Uint16()
 	o.ParentID = readVU_ID(c)
 	o.FirstOwner = c.Uint8()
-	o.NumLinks = c.Uint8()
-	o.Links = make([]CampObjectiveLinkDataType, o.NumLinks)
-	for i := range o.NumLinks {
+	nl := c.Uint8()
+	o.Links = make([]CampObjectiveLinkDataType, nl)
+	for i := range nl {
 		o.Links[i] = readCampObjectiveLinkDataType(c)
 	}
-	o.HasRadarData = c.Uint8()
-	if o.HasRadarData > 0 {
+	if c.Uint8() > 0 {
 		o.DetectRatios = make([]float32, 8)
 		for i := range 8 {
 			o.DetectRatios[i] = c.Float32()
 		}
+	} else {
+		o.DetectRatios = make([]float32, 0)
 	}
 	o.PosX = c.Float64()
 	o.PosY = c.Float64()
