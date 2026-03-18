@@ -13,6 +13,9 @@ var logBdRed = util.NewLogger("FileBundleReader", os.Stdout, util.Info, true)
 type MissionManager struct {
 	falconBase string
 	classTable []*SCT
+	objectives []*Objective
+	deltas     []*ObjectiveDeltas
+	units      []*any
 }
 
 func (m *MissionManager) loadClassTable() {
@@ -44,6 +47,65 @@ func (m *MissionManager) loadBundle(filename string) *FileBundleReader {
 	return reader
 }
 
+func (m *MissionManager) outputJson(outputBase string, outputFilePrefix string) {
+	logBdRed.Infof("Writing json data to %s/%s_*.json", outputBase, outputFilePrefix)
+	err := WriteToJSON(m.units, outputBase+"/"+outputFilePrefix+"_units.json")
+	if err != nil {
+		logBdRed.Errorf("error writing units to JSON: %v", err)
+	}
+	err = WriteToJSON(m.objectives, outputBase+"/"+outputFilePrefix+"_objectives.json")
+	if err != nil {
+		logBdRed.Errorf("error writing objectives to JSON: %v", err)
+	}
+	err = WriteToJSON(m.deltas, outputBase+"/"+outputFilePrefix+"_deltas.json")
+	if err != nil {
+		logBdRed.Errorf("error writing deltas to JSON: %v", err)
+	}
+
+	objectiveTree := buildObjectiveTree(m.objectives)
+	err = WriteToJSON(objectiveTree, outputBase+"/"+outputFilePrefix+"_objective_tree.json")
+	if err != nil {
+		logBdRed.Errorf("error writing deltas to JSON: %v", err)
+	}
+}
+
+func (m *MissionManager) applyDeltas() {
+	logBdRed.Infof("Applying deltas to objectives")
+	deltaByID := make(map[uint32]*ObjectiveDeltas, len(m.deltas))
+	for _, delta := range m.deltas {
+		deltaByID[delta.ID.Num] = delta
+	}
+	for _, obj := range m.objectives {
+		if delta, ok := deltaByID[obj.CampaignBase.ID.Num]; ok {
+			logChanges(obj, delta)
+			obj.LastRepair = delta.LastRepair
+			obj.FirstOwner = delta.Owner //TODO: rename field to better reflect that it can be changed
+			obj.Supply = delta.Supply
+			obj.Fuel = delta.Fuel
+			obj.Losses = delta.Losses
+			obj.Statuses = delta.Statuses
+		}
+	}
+}
+
+func logChanges(obj *Objective, delta *ObjectiveDeltas) {
+	if obj.LastRepair != delta.LastRepair {
+		logBdRed.Debugf("Objective %d: LastRepair %d -> %d", obj.CampaignBase.ID.Num, obj.LastRepair, delta.LastRepair)
+	}
+	if obj.FirstOwner != delta.Owner {
+		logBdRed.Debugf("Objective %d: FirstOwner %d -> %d", obj.CampaignBase.ID.Num, obj.FirstOwner, delta.Owner)
+	}
+	if obj.Supply != delta.Supply {
+		logBdRed.Debugf("Objective %d: Supply %d -> %d", obj.CampaignBase.ID.Num, obj.Supply, delta.Supply)
+	}
+	if obj.Fuel != delta.Fuel {
+		logBdRed.Debugf("Objective %d: Fuel %d -> %d", obj.CampaignBase.ID.Num, obj.Fuel, delta.Fuel)
+	}
+	if obj.Losses != delta.Losses {
+		logBdRed.Debugf("Objective %d: Losses %d -> %d", obj.CampaignBase.ID.Num, obj.Losses, delta.Losses)
+	}
+}
+
 func NewMissionManager(falconBase string) *MissionManager {
 	return &MissionManager{
 		falconBase: falconBase,
@@ -63,8 +125,8 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 		log.Fatal(err)
 	}
 	deltaReader := NewObjectiveDeltaReader()
-	deltas := deltaReader.ReadObdFile(deltaData)
-	logBdRed.Infof("Num Deltas: %d", len(deltas))
+	m.deltas = deltaReader.ReadObdFile(deltaData)
+	logBdRed.Infof("Num Deltas: %d", len(m.deltas))
 
 	campaignData, err := missionBundle.GetEmbeddedFileContentsByType(CampaignType)
 	if err != nil {
@@ -84,7 +146,7 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 		log.Fatal(err)
 	}
 	unitReader := NewUnitReader(m.classTable)
-	units := unitReader.ReadUniFile(unitData)
+	m.units = unitReader.ReadUniFile(unitData)
 
 	unitCounts := unitReader.Counts()
 	logBdRed.Infof("Num Units:       %d", unitCounts.NumUnits)
@@ -104,45 +166,28 @@ func (m *MissionManager) ReadMission(missionFilename string, outputBase string) 
 		log.Fatal(err)
 	}
 	objectiveReader := NewObjectiveReader(m.classTable)
-	objectives := objectiveReader.ReadObjFile(objectiveData)
-	logBdRed.Infof("Num Objectives: %d", len(objectives))
+	m.objectives = objectiveReader.ReadObjFile(objectiveData)
+	logBdRed.Infof("Num Objectives: %d", len(m.objectives))
+
+	m.applyDeltas()
 
 	fileNoExt := strings.TrimSuffix(missionFilename, filepath.Ext(missionFilename))
-	err = WriteToJSON(units, outputBase+"/"+fileNoExt+"_units.json")
-	if err != nil {
-		logBdRed.Errorf("error writing units to JSON: %v", err)
-	}
-	err = WriteToJSON(objectives, outputBase+"/"+fileNoExt+"_objectives.json")
-	if err != nil {
-		logBdRed.Errorf("error writing objectives to JSON: %v", err)
-	}
-	err = WriteToJSON(deltas, outputBase+"/"+fileNoExt+"_deltas.json")
-	if err != nil {
-		logBdRed.Errorf("error writing deltas to JSON: %v", err)
-	}
-
-	objectiveTree := BuildObjectiveTree(objectives)
-	err = WriteToJSON(objectiveTree, outputBase+"/"+fileNoExt+"_objective_tree.json")
-	if err != nil {
-		logBdRed.Errorf("error writing deltas to JSON: %v", err)
-	}
+	m.outputJson(outputBase, fileNoExt)
 }
 
 type ObjectiveNode struct {
-	Objective Objective
+	Objective *Objective
 	CampName  string
 	Children  []*ObjectiveNode
 }
 
-func BuildObjectiveTree(objectives []Objective) []*ObjectiveNode {
+func buildObjectiveTree(objectives []*Objective) []*ObjectiveNode {
 	nodes := make(map[uint32]*ObjectiveNode, len(objectives))
 	roots := make([]*ObjectiveNode, 0)
 
-	// Erst alle Knoten anlegen
 	for i := range objectives {
 		obj := objectives[i]
 		id := obj.CampaignBase.ID.Num
-
 		nodes[id] = &ObjectiveNode{
 			Objective: obj,
 			CampName:  obj.CampName,
@@ -150,23 +195,17 @@ func BuildObjectiveTree(objectives []Objective) []*ObjectiveNode {
 		}
 	}
 
-	// Dann Eltern-Kind-Beziehungen herstellen
 	for i := range objectives {
 		obj := objectives[i]
 		id := obj.CampaignBase.ID.Num
 		parentID := obj.ParentID.Num
-
 		node := nodes[id]
-
-		// Root, wenn kein Parent oder Parent nicht vorhanden
 		parent, ok := nodes[parentID]
 		if !ok || parentID == 0 || parentID == id {
 			roots = append(roots, node)
 			continue
 		}
-
 		parent.Children = append(parent.Children, node)
 	}
-
 	return roots
 }

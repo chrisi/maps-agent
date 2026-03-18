@@ -18,7 +18,7 @@ func NewObjectiveReader(classTable []*SCT) *ObjectiveReader {
 	}
 }
 
-func (or *ObjectiveReader) ReadObjFile(data []byte) []Objective {
+func (or *ObjectiveReader) ReadObjFile(data []byte) []*Objective {
 	or.log.Infof("Reading objectives")
 
 	hdrCur := NewCursor(data)
@@ -39,14 +39,14 @@ func (or *ObjectiveReader) ReadObjFile(data []byte) []Objective {
 	return or.readAllObjectives(expanded)
 }
 
-func (or *ObjectiveReader) readAllObjectives(data []byte) []Objective {
+func (or *ObjectiveReader) readAllObjectives(data []byte) []*Objective {
 	c := NewCursor(data)
-	var objectives []Objective
+	var objectives []*Objective
 	for i := 0; i < or.numObjectives; i++ {
 		_ = int(c.Uint16()) // entityType, also in squadron.entityType
 		obj := readObjective(c)
 		obj.ClassType = or.classTable[obj.CampaignBase.EntityType-100]
-		objectives = append(objectives, obj)
+		objectives = append(objectives, &obj)
 	}
 	return objectives
 }

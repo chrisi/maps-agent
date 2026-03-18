@@ -30,7 +30,7 @@ func NewUnitReader(classTable []*SCT) *UnitReader {
 	}
 }
 
-func (ur *UnitReader) ReadUniFile(data []byte) []any {
+func (ur *UnitReader) ReadUniFile(data []byte) []*any {
 	ur.log.Infof("Reading units")
 
 	ur.counters = Counts{
@@ -65,42 +65,38 @@ func (ur *UnitReader) Counts() Counts {
 	return ur.counters
 }
 
-func (ur *UnitReader) readAllUnits(data []byte) []any {
+func (ur *UnitReader) readAllUnits(data []byte) []*any {
 	ur.c = NewCursor(data)
-	var units []any
+	var units []*any
 	for i := 0; i < ur.numUnits; i++ {
 		unit := ur.readUnit()
-		units = append(units, unit)
+		if unit != nil {
+			units = append(units, unit)
+		}
 	}
 	return units
 }
 
-func (ur *UnitReader) readUnit() any {
+func (ur *UnitReader) readUnit() *any {
 	entityType := int(ur.c.Uint16())
-	if entityType <= len(ur.classTable)+100 {
-		if entityType >= 100 {
-			ur.log.Debugf("UnitType: %d", entityType)
-			start := ur.c.pos
-			unit := ur.readUnitByClassType(ur.classTable[entityType-100])
-			size := ur.c.pos - start
-			numWp := -1
-			hu, ok := unit.(HasUnit)
-			if ok {
-				numWp = len(hu.GetUnit().Waypoints)
-			}
-			if numWp > 20 || size > 2000 {
-				ur.log.Warnf("Unit size: %d, waypoints: %d", size, numWp)
-			}
-			return unit
-		} else if entityType > 3707 { // TODO: ergibt wenig Sinn, ist aber im Original so
-			ur.log.Warnf("UnitType strange:", entityType)
-			return ur.readUnitByClassType(ur.classTable[3607])
-		} else {
-			ur.log.Warnf("UnitType 430")
-			return ur.readUnitByClassType(ur.classTable[430])
-		}
+	ct := entityType - 100
+	if ct < 0 || ct > len(ur.classTable) {
+		ur.log.Warnf("UnitType out of bounds: %d", ct)
+		return nil
 	}
-	return nil
+	ur.log.Debugf("UnitType: %d", ct)
+	start := ur.c.pos
+	unit := ur.readUnitByClassType(ur.classTable[ct])
+	size := ur.c.pos - start
+	numWp := -1
+	hu, ok := unit.(HasUnit)
+	if ok {
+		numWp = len(hu.GetUnit().Waypoints)
+	}
+	if numWp > 20 || size > 2000 {
+		ur.log.Warnf("Unit size: %d, waypoints: %d", size, numWp)
+	}
+	return &unit
 }
 
 func (ur *UnitReader) readUnitByClassType(classType *SCT) any {

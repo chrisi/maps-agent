@@ -16,7 +16,7 @@ func NewObjectiveDeltaReader() *ObjectiveDeltaReader {
 	}
 }
 
-func (or *ObjectiveDeltaReader) ReadObdFile(data []byte) []ObjectiveDeltas {
+func (or *ObjectiveDeltaReader) ReadObdFile(data []byte) []*ObjectiveDeltas {
 	or.log.Infof("Reading objective deltas")
 
 	hdrCur := NewCursor(data)
@@ -37,12 +37,12 @@ func (or *ObjectiveDeltaReader) ReadObdFile(data []byte) []ObjectiveDeltas {
 	return or.readAllObjectiveDeltas(expanded)
 }
 
-func (or *ObjectiveDeltaReader) readAllObjectiveDeltas(data []byte) []ObjectiveDeltas {
+func (or *ObjectiveDeltaReader) readAllObjectiveDeltas(data []byte) []*ObjectiveDeltas {
 	c := NewCursor(data)
-	var deltas []ObjectiveDeltas
+	var deltas []*ObjectiveDeltas
 	for range or.numDeltas {
 		d := readObjectiveDeltas(c)
-		deltas = append(deltas, d)
+		deltas = append(deltas, &d)
 	}
 	return deltas
 }
