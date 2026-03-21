@@ -28,11 +28,14 @@ func (cr *CampaignReader) ReadCmpFile(data []byte) (*Campaign, error) {
 		return nil, err
 	}
 
-	cr.log.Infof("Compressed size: %d", len(data))
-	cr.log.Infof("Uncompressed size: %d", len(expanded))
-
+	cr.log.Debugf("Compressed size: %d", len(data))
+	cr.log.Debugf("Uncompressed size: %d", len(expanded))
 	c := NewCursor(expanded)
-	return readCampaign(c), nil
+	cmp := readCampaign(c)
+	cr.log.Infof("Theater: %s", cmp.TheaterName)
+	cr.log.Infof("Scenario: %s", cmp.Scenario)
+	cr.log.Debugf("UI-name: %s", cmp.UiName)
+	return cmp, nil
 }
 
 func readCampaign(c *Cursor) *Campaign {

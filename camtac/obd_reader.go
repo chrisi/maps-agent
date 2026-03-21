@@ -30,8 +30,8 @@ func (or *ObjectiveDeltaReader) ReadObdFile(data []byte) []*ObjectiveDeltas {
 		return nil
 	}
 
-	or.log.Infof("Compressed size: %d", len(data))
-	or.log.Infof("Uncompressed size: %d", len(expanded))
+	or.log.Debugf("Compressed size: %d", len(data))
+	or.log.Debugf("Uncompressed size: %d", len(expanded))
 	or.log.Infof("Deltas: %d", or.numDeltas)
 
 	return or.readAllObjectiveDeltas(expanded)

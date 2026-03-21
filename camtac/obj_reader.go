@@ -32,8 +32,8 @@ func (or *ObjectiveReader) ReadObjFile(data []byte) []*Objective {
 		return nil
 	}
 
-	or.log.Infof("Compressed size: %d", len(data))
-	or.log.Infof("Uncompressed size: %d", len(expanded))
+	or.log.Debugf("Compressed size: %d", len(data))
+	or.log.Debugf("Uncompressed size: %d", len(expanded))
 	or.log.Infof("Objectives: %d", or.numObjectives)
 
 	return or.readAllObjectives(expanded)
