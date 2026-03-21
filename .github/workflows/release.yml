@@ -1,47 +1,82 @@
-name: Create Release
+name: Go Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Tag name for the release (e.g. v1.0.0)'
-        required: true
-        default: 'v1.0.0'
+  push:
+    tags:
+      - "v*"
 
 jobs:
-  release:
+  build:
     runs-on: windows-latest
     strategy:
       matrix:
-        goarch: [amd64, arm64]
-    permissions:
-      contents: write
+        include:
+          - arch: amd64
+            zig_target: x86_64-windows-gnu
+          - arch: arm64
+            zig_target: aarch64-windows-gnu
+
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.26'
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
 
-    - name: Install dependencies
-      run: go mod download
+      - name: Install Zig
+        shell: pwsh
+        run: |
+          choco install zig -y --no-progress
 
-    - name: Build
-      run: go build -v -o maps-agent-${{ matrix.goarch }}.exe .
-      env:
-        GOOS: windows
-        GOARCH: ${{ matrix.goarch }}
+      - name: Prepare CGO compiler wrapper
+        shell: pwsh
+        run: |
+          $wrapper = "$env:GITHUB_WORKSPACE\cc.cmd"
+          @"
+          @echo off
+          zig cc -target ${{ matrix.zig_target }} %*
+          "@ | Set-Content -Path $wrapper -Encoding ASCII
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-      with:
-        tag_name: ${{ github.event.inputs.tag_name }}
-        files: maps-agent-${{ matrix.goarch }}.exe
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install dependencies
+        shell: pwsh
+        run: go mod download
+
+      - name: Build
+        shell: pwsh
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+          CC: ${{ github.workspace }}\cc.cmd
+        run: go build -v -o maps-agent-${{ matrix.arch }}.exe .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: maps-agent-binary-${{ matrix.arch }}
+          path: maps-agent-${{ matrix.arch }}.exe
+
+  release:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: maps-agent-binary-amd64
+          path: dist
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: maps-agent-binary-arm64
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/maps-agent-amd64.exe
+            dist/maps-agent-arm64.exe
