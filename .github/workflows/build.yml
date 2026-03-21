@@ -11,7 +11,11 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        arch: [ amd64, arm64 ]
+        include:
+          - arch: amd64
+            zig_target: x86_64-windows-gnu
+          - arch: arm64
+            zig_target: aarch64-windows-gnu
 
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +26,22 @@ jobs:
           go-version: '1.26'
           cache: true
 
+      - name: Install Zig
+        shell: pwsh
+        run: |
+          choco install zig -y --no-progress
+
+      - name: Prepare CGO compiler wrapper
+        shell: pwsh
+        run: |
+          $wrapper = "$env:GITHUB_WORKSPACE\cc.cmd"
+          @"
+          @echo off
+          zig cc -target ${{ matrix.zig_target }} %*
+          "@ | Set-Content -Path $wrapper -Encoding ASCII
+
       - name: Install dependencies
+        shell: pwsh
         run: go mod download
 
       - name: Build
@@ -30,6 +49,8 @@ jobs:
         env:
           GOOS: windows
           GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+          CC: ${{ github.workspace }}\cc.cmd
         run: go build -v -o maps-agent-${{ matrix.arch }}.exe .
 
       - name: Upload artifact
