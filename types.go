@@ -6,9 +6,10 @@ type Point struct {
 }
 
 type Objective struct {
-	Name   string `json:"name"`
-	Owner  int    `json:"owner"`
-	OcdIdx int    `json:"ocdIdx"`
-	Type   int    `json:"type"`
-	Pos    Point  `json:"pos"`
+	Name  string `json:"name"`
+	Owner int    `json:"owner"`
+
+	OcdIdx int   `json:"ocdIdx"`
+	Type   int   `json:"type"`
+	Pos    Point `json:"pos"`
 }

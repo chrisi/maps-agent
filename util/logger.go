@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
+	"os"
 )
 
 type Level int
@@ -35,6 +37,7 @@ type Logger struct {
 	level   Level
 	enabled bool
 	logger  *log.Logger
+	loggers *slog.Logger
 }
 
 func NewLogger(name string, out io.Writer, level Level, enabled bool) *Logger {
@@ -43,6 +46,7 @@ func NewLogger(name string, out io.Writer, level Level, enabled bool) *Logger {
 		level:   level,
 		enabled: enabled,
 		logger:  log.New(out, "", log.LstdFlags|log.Lmicroseconds),
+		loggers: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})),
 	}
 }
 

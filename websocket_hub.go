@@ -19,7 +19,7 @@ type AgentMessage struct {
 	Version int         `json:"version,omitempty"`
 	Payload interface{} `json:"payload,omitempty"`
 }
-type Hub struct {
+type WebsocketHub struct {
 	clients    map[*websocket.Conn]bool
 	broadcast  chan []byte
 	register   chan *websocket.Conn
@@ -27,8 +27,8 @@ type Hub struct {
 	mu         sync.Mutex
 }
 
-func newHub() *Hub {
-	return &Hub{
+func NewWebsocketHub() *WebsocketHub {
+	return &WebsocketHub{
 		clients:    make(map[*websocket.Conn]bool),
 		broadcast:  make(chan []byte),
 		register:   make(chan *websocket.Conn),
@@ -36,7 +36,7 @@ func newHub() *Hub {
 	}
 }
 
-func (h *Hub) run() {
+func (h *WebsocketHub) run() {
 	for {
 		select {
 		case client := <-h.register:

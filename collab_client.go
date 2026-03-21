@@ -3,22 +3,28 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"maps-agent/util"
+	"os"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+// The CollabClient is used to share position updates with other flight members when connected to IMCS.
+// This is in contrast to the WebsocketHub which sends position updates directly to the Maps-App
+// usually hosted locally alongside the BMS Client when connected to this agent.
 type CollabClient struct {
-	reader    *SharedMemReader
+	logger    *util.Logger
 	serverURL string
 	callsign  string
 	session   string
+	smr       *SharedMemReader
 }
 
-func newCollabClient(serverURL string, reader *SharedMemReader, callsign string, session string) *CollabClient {
+func NewCollabClient(serverURL string, callsign string, session string, smr *SharedMemReader) *CollabClient {
 	return &CollabClient{
-		reader:    reader,
+		logger:    util.NewLogger("CollabClient", os.Stdout, util.Info, true),
+		smr:       smr,
 		serverURL: serverURL,
 		callsign:  callsign,
 		session:   session,
@@ -28,13 +34,14 @@ func newCollabClient(serverURL string, reader *SharedMemReader, callsign string,
 func (c *CollabClient) Run(ctx context.Context) error {
 	conn, _, err := websocket.DefaultDialer.Dial(c.serverURL, nil)
 	if err != nil {
+		c.logger.Errorf("failed to connect to IMCS: %v\n", err)
 		return err
 	}
 	defer func(conn *websocket.Conn) {
 		_ = conn.Close()
 	}(conn)
 
-	log.Printf("connected to IMCS: %s", c.serverURL)
+	c.logger.Infof("connected to IMCS using URL: %s\n ", c.serverURL)
 
 	//TODO: send auth with callsign and session
 
@@ -44,7 +51,7 @@ func (c *CollabClient) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("disconnecting from IMCS")
+			c.logger.Infof("disconnecting from IMCS")
 			_ = conn.WriteMessage(
 				websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "shutdown"),
@@ -52,20 +59,21 @@ func (c *CollabClient) Run(ctx context.Context) error {
 			return nil
 
 		case <-ticker.C:
-			pos := c.reader.getOwnShip()
-			if err != nil {
-				log.Printf("error reading position: %v", err)
-				continue
-			}
-
-			payload, err := json.Marshal(pos)
-			if err != nil {
-				log.Printf("error serializing position: %v", err)
-				continue
-			}
-
-			if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
-				return err
+			if c.smr.IsReady() {
+				ship := c.smr.GetOwnShip()
+				//TODO: change AgentMessage to correct IMCS data structure
+				msg := AgentMessage{
+					Type:    "pos",
+					Payload: &ship,
+				}
+				payload, err := json.Marshal(msg)
+				if err != nil {
+					c.logger.Errorf("error serializing position: %s\n", err)
+					continue
+				}
+				if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+					return err
+				}
 			}
 		}
 	}

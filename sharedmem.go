@@ -7,6 +7,8 @@ package main
 import "C"
 
 import (
+	"maps-agent/util"
+	"os"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -31,9 +33,18 @@ var (
 )
 
 type SharedMemReader struct {
+	logger  *util.Logger
 	hMap    windows.Handle
+	ready   bool
 	fd1Addr uintptr
 	fd1     *C.FlightData
+}
+
+func NewSharedMemReader() *SharedMemReader {
+	return &SharedMemReader{
+		logger: util.NewLogger("SharedMemReader", os.Stdout, util.Info, true),
+		ready:  false,
+	}
 }
 
 func (r *SharedMemReader) openFileMappingRead(name string) (windows.Handle, error) {
@@ -86,37 +97,57 @@ func (r *SharedMemReader) unmapView(addr uintptr) error {
 	return nil
 }
 
-func (r *SharedMemReader) open() error {
+func (r *SharedMemReader) Open() error {
 	hnd, err := r.openFileMappingRead(mappingName)
 	if err != nil {
+		r.logger.Errorf("failed to open Falcon BMS shared memory error: %v\n", err)
 		return err
 	}
 	r.hMap = hnd
 	r.fd1Addr, err = r.mapViewRead(r.hMap)
 	if err != nil {
+		_ = r.unmapView(r.fd1Addr)
+		_ = windows.CloseHandle(r.hMap)
+		r.logger.Errorf("failed to map Falcon BMS shared memory error: %v\n", err)
 		return err
 	}
 	r.fd1 = (*C.FlightData)(unsafe.Pointer(r.fd1Addr))
+	r.ready = true
+	r.logger.Infof("successfully opened Falcon BMS shared memory, version %d\n", r.GetVersion())
 	return nil
 }
 
-func (r *SharedMemReader) close() {
-	_ = r.unmapView(r.fd1Addr)
-	_ = windows.CloseHandle(r.hMap)
+func (r *SharedMemReader) IsReady() bool {
+	return r.ready
 }
 
-func (r *SharedMemReader) getOwnShip() *OwnShip {
+func (r *SharedMemReader) Close() {
+	_ = r.unmapView(r.fd1Addr)
+	_ = windows.CloseHandle(r.hMap)
+	r.ready = false
+}
+
+func (r *SharedMemReader) GetOwnShip() *OwnShip {
+	if !r.ready {
+		return nil
+	}
 	x := float32(r.fd1.y) // North (ft)
 	y := float32(r.fd1.x) // East (ft)
 	z := float32(r.fd1.z) // Down (ft)
 	return &OwnShip{x, y, z}
 }
 
-func (r *SharedMemReader) getVersion() int {
+func (r *SharedMemReader) GetVersion() int {
+	if !r.ready {
+		return -1
+	}
 	v := int(r.fd1.VersionNum)
 	return v
 }
 
-func (r *SharedMemReader) isFlying() bool {
+func (r *SharedMemReader) IsFlying() bool {
+	if !r.ready {
+		return false
+	}
 	return r.fd1.hsiBits|0x80000000 > 0
 }
