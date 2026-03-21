@@ -61,6 +61,8 @@ jobs:
   release:
     needs: build
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - name: Download amd64 artifact
         uses: actions/download-artifact@v4
