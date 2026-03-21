@@ -39,6 +39,8 @@ Usage of maps-agent.exe:
     	Falcon BMS directory (default "C:/Progam Files/Falcon BMS 4.38")
   -pos-update-freq string
     	Milliseconds between sending position updates (default "250")
+  -shared-mem
+    	Read Falcon BMS Shared memory and broadcast them
 ```
 
 ### Start

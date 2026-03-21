@@ -23,7 +23,7 @@ func parseConfig() Config {
 	defaultFalconBase := "C:/Progam Files/Falcon BMS 4.38"
 	defaultCallsign := "Viper"
 	defaultSession := "47DF"
-	defaultServerAddr := "localhost:8080"
+	defaultServerAddr := ":8080"
 	defaultImcsServer := "wss://collab.falcon-bms.com:443"
 
 	falconBase := flag.String("path", defaultFalconBase, "Falcon BMS directory")
