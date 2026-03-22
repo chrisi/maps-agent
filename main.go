@@ -44,7 +44,8 @@ func main() {
 	go hub.run()
 	ws.RegisterWebsocketEndpoint(hub)
 
-	startWatch(iniPath, hub, cfg.FsCheckFreq)
+	watcher := NewFileWatcher(hub, cfg.FsCheckFreq)
+	watcher.Start(iniPath)
 
 	if cfg.ReadSharedMem {
 		logger.Infof("Enabling Falcon BMS shared memory reader")
@@ -89,6 +90,7 @@ func main() {
 	}
 
 	ws.Start()
+	watcher.Stop()
 }
 
 func minimizeObjectives(objectives []*camtac.Objective) []*Objective {
