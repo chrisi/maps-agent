@@ -52,6 +52,13 @@ func (w *Webserver) RegisterMissionResourceEndpoints(manager *camtac.MissionMana
 		read := minimizeObjectives(manager.GetObjectivesByTypes([]int{camtac.TypeFactory}))
 		c.JSON(http.StatusOK, read)
 	})
+
+	w.r.GET("/tacfiles/:theater", func(c *gin.Context) {
+		//theater := c.Param("theater")
+
+		read := manager.GetTacFiles(camtac.Korea)
+		c.JSON(http.StatusOK, read)
+	})
 }
 
 func (w *Webserver) RegisterSharedMemoryEndpoint(smr *SharedMemReader) {

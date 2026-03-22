@@ -1,10 +1,13 @@
 package camtac
 
 import (
+	"fmt"
 	"log"
 	"maps-agent/util"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 type MissionManager struct {
@@ -83,6 +86,84 @@ func (m *MissionManager) ReadMission(theater Theater, missionFilename string) {
 	m.logger.Infof("Num Objectives: %d", len(m.objectives))
 
 	m.applyDeltas()
+}
+
+type TacFile struct {
+	Theater     string    `json:"theater"`
+	Filename    string    `json:"filename"`
+	SaveDate    time.Time `json:"saveDate"`
+	MissionDate string    `json:"missionDate"`
+	Squadrons   int       `json:"squadrons"`
+}
+
+var excludedFiles = []string{"Te_New.tac", "Te_New_Nt.tac", "Save0.cam", "Save1.cam",
+	"Save2.cam", "Save3.cam", "Save4.cam", "Save5.cam", "TE_BMS_*"}
+
+func (m *MissionManager) GetTacFiles(theater Theater) []TacFile {
+	m.logger.Infof("Fetching TAC Files for %s\n", theater)
+
+	campaignBase := m.falconBase + "/Data" + string(theater) + "/Campaign"
+
+	files, err := os.ReadDir(campaignBase)
+	if err != nil {
+		m.logger.Errorf("Error reading campaign directory: %v", err)
+		return nil
+	}
+
+	m.loadClassTable()
+	m.initializeReaders()
+	var tacFiles []TacFile
+
+	for _, file := range files {
+		if file.IsDir() ||
+			!strings.HasSuffix(strings.ToLower(file.Name()), ".tac") ||
+			Contains(excludedFiles, file.Name()) {
+			continue
+		}
+		filename := filepath.Join(campaignBase, file.Name())
+		m.logger.Infof("Reading '%s'\n", filename)
+		bundle, err := NewFileBundleReaderFromFile(filename)
+		if err != nil {
+			m.logger.Errorf("Error loading bundle %s: %v", filename, err)
+			continue
+		}
+
+		cmpData, err := bundle.GetEmbeddedFileContentsByType(CampaignType)
+		if err != nil {
+			m.logger.Errorf("Error getting campaign data from %s: %v", filename, err)
+			continue
+		}
+
+		cmp, err := m.campaignReader.ReadCmpFile(cmpData)
+		if err != nil {
+			m.logger.Errorf("Error reading campaign file from %s: %v", filename, err)
+			continue
+		}
+
+		totalSeconds := cmp.CurrentTime / 1000
+		days := totalSeconds / (24 * 3600)
+		remainingSeconds := totalSeconds % (24 * 3600)
+		hours := remainingSeconds / 3600
+		remainingSeconds %= 3600
+		minutes := remainingSeconds / 60
+		seconds := remainingSeconds % 60
+
+		info, err := os.Stat(filename)
+		if err != nil {
+			m.logger.Errorf("Error reading modification date from file %s: %v", filename, err)
+		}
+
+		missionDate := fmt.Sprintf("Day %d, %02d:%02d:%02d", days+1, hours, minutes, seconds)
+
+		tacFiles = append(tacFiles, TacFile{
+			Theater:     cmp.TheaterName,
+			Filename:    file.Name(),
+			SaveDate:    info.ModTime(),
+			MissionDate: missionDate,
+			Squadrons:   int(cmp.NumAvailableSquadrons),
+		})
+	}
+	return tacFiles
 }
 
 func (m *MissionManager) OutputJson(outputBase string, outputFilePrefix string) {

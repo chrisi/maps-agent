@@ -25,6 +25,9 @@ func main() {
 	ws := NewWebserver(cfg.ServerAddr)
 
 	manager := camtac.NewMissionManager(cfg.FalconBase)
+	files := manager.GetTacFiles(camtac.Korea)
+	logger.Infof("Found %d TAC files", len(files))
+	logger.Infof("%v", files)
 	if cfg.MissionFilename != "" {
 		manager.ReadMission(camtac.Korea, cfg.MissionFilename)
 		if cfg.ExportJsonDir != "" {
