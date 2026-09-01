@@ -18,9 +18,16 @@ type Webserver struct {
 }
 
 func NewWebserver(addr string) *Webserver {
+	r := gin.Default()
+	r.Use(cors.New(cors.Config{
+		AllowAllOrigins: true,
+		AllowMethods:    []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowHeaders:    []string{"Origin", "Content-Length", "Content-Type"},
+	}))
+
 	return &Webserver{
 		logger: util.NewLogger("Webserver", os.Stdout, util.Info, true),
-		r:      gin.Default(),
+		r:      r,
 		addr:   addr,
 	}
 }
@@ -94,12 +101,6 @@ func (w *Webserver) RegisterWebsocketEndpoint(hub *WebsocketHub) {
 }
 
 func (w *Webserver) Start() {
-	w.r.Use(cors.New(cors.Config{
-		AllowAllOrigins: true,
-		AllowMethods:    []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-		AllowHeaders:    []string{"Origin", "Content-Length", "Content-Type"},
-	}))
-
 	w.logger.Infof("starting server on %s", w.addr)
 
 	if err := w.r.Run(w.addr); err != nil {

@@ -44,8 +44,12 @@ func main() {
 	go hub.run()
 	ws.RegisterWebsocketEndpoint(hub)
 
-	watcher := NewFileWatcher(hub, cfg.FsCheckFreq)
-	watcher.Start(iniPath)
+	watcher, err := NewFileWatcher(hub, cfg.FsCheckFreq)
+	if err == nil {
+		watcher.Add(iniPath)
+		watcher.Add(cfg.FalconBase + "/Data" + string(camtac.Korea) + "/Campaign")
+		watcher.Start()
+	}
 
 	if cfg.ReadSharedMem {
 		logger.Infof("Enabling Falcon BMS shared memory reader")
