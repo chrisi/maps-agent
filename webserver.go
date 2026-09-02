@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"maps-agent/camtac"
 	"maps-agent/util"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -48,6 +50,22 @@ func (w *Webserver) RegisterBriefingEndpoints(iniPath string) {
 	})
 }
 
+func getTheater(theater string) (camtac.Theater, error) {
+	s := strings.ToLower(theater)
+	switch s {
+	case "korea":
+		return camtac.Korea, nil
+	case "balkans":
+		return camtac.Balkans, nil
+	case "israel":
+		return camtac.Israel, nil
+	case "hellas":
+		return camtac.Hellas, nil
+	default:
+		return "", fmt.Errorf("unknown theater %s", theater)
+	}
+}
+
 func (w *Webserver) RegisterMissionResourceEndpoints(manager *camtac.MissionManager) {
 	w.logger.Infof("Registering mission resource endpoint")
 	w.r.GET("/mission/stations", func(c *gin.Context) {
@@ -60,10 +78,18 @@ func (w *Webserver) RegisterMissionResourceEndpoints(manager *camtac.MissionMana
 		c.JSON(http.StatusOK, read)
 	})
 
-	w.r.GET("/tacfiles/:theater", func(c *gin.Context) {
-		//theater := c.Param("theater")
-
-		read := manager.GetTacFiles(camtac.Korea)
+	w.r.GET("/missionfiles/:theater/:type", func(c *gin.Context) {
+		theater, err := getTheater(c.Param("theater"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		tp := camtac.MissionType(strings.ToLower(c.Param("type")))
+		if tp.Valid() == false {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid mission type %q", tp)})
+			return
+		}
+		read := manager.GetMissionFiles(theater, tp)
 		c.JSON(http.StatusOK, read)
 	})
 }

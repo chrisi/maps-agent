@@ -88,19 +88,31 @@ func (m *MissionManager) ReadMission(theater Theater, missionFilename string) {
 	m.applyDeltas()
 }
 
-type TacFile struct {
-	Theater     string    `json:"theater"`
-	Filename    string    `json:"filename"`
-	SaveDate    time.Time `json:"saveDate"`
-	MissionDate string    `json:"missionDate"`
-	Squadrons   int       `json:"squadrons"`
+type MissionType string
+
+const (
+	MissionTypeCAM MissionType = "cam"
+	MissionTypeTAC MissionType = "tac"
+)
+
+func (t MissionType) Valid() bool {
+	return t == MissionTypeCAM || t == MissionTypeTAC
 }
 
-var excludedFiles = []string{"Te_New.tac", "Te_New_Nt.tac", "Save0.cam", "Save1.cam",
-	"Save2.cam", "Save3.cam", "Save4.cam", "Save5.cam", "TE_BMS_*"}
+type MissionFile struct {
+	Theater     string      `json:"theater"`
+	Type        MissionType `json:"type"`
+	Filename    string      `json:"filename"`
+	SaveDate    time.Time   `json:"saveDate"`
+	MissionDate string      `json:"missionDate"`
+	Squadrons   int         `json:"squadrons"`
+}
 
-func (m *MissionManager) GetTacFiles(theater Theater) []TacFile {
-	m.logger.Infof("Fetching TAC Files for %s\n", theater)
+var excludedFiles = []string{"te_new.tac", "te_new_nt.tac", "save0.cam", "save1.cam",
+	"save2.cam", "save3.cam", "save4.cam", "save5.cam", "te_bms_*"}
+
+func (m *MissionManager) GetMissionFiles(theater Theater, missionType MissionType) []MissionFile {
+	m.logger.Infof("Fetching %s Files for %s\n", missionType, theater)
 
 	campaignBase := m.falconBase + "/Data" + string(theater) + "/Campaign"
 
@@ -112,12 +124,12 @@ func (m *MissionManager) GetTacFiles(theater Theater) []TacFile {
 
 	m.loadClassTable()
 	m.initializeReaders()
-	var tacFiles []TacFile
+	var mizFiles []MissionFile
 
 	for _, file := range files {
 		if file.IsDir() ||
-			!strings.HasSuffix(strings.ToLower(file.Name()), ".tac") ||
-			Contains(excludedFiles, file.Name()) {
+			!strings.HasSuffix(strings.ToLower(file.Name()), "."+string(missionType)) ||
+			Contains(excludedFiles, strings.ToLower(file.Name())) {
 			continue
 		}
 		filename := filepath.Join(campaignBase, file.Name())
@@ -155,15 +167,16 @@ func (m *MissionManager) GetTacFiles(theater Theater) []TacFile {
 
 		missionDate := fmt.Sprintf("Day %d, %02d:%02d:%02d", days+1, hours, minutes, seconds)
 
-		tacFiles = append(tacFiles, TacFile{
+		mizFiles = append(mizFiles, MissionFile{
 			Theater:     cmp.TheaterName,
+			Type:        missionType,
 			Filename:    file.Name(),
 			SaveDate:    info.ModTime(),
 			MissionDate: missionDate,
 			Squadrons:   int(cmp.NumAvailableSquadrons),
 		})
 	}
-	return tacFiles
+	return mizFiles
 }
 
 func (m *MissionManager) OutputJson(outputBase string, outputFilePrefix string) {
