@@ -60,7 +60,6 @@ func (fw *FileWatcher) Start() {
 					fw.logger.Errorf("event not ok: %s", event.Name)
 					return
 				}
-				fw.logger.Debugf("event: %s", event.Name)
 				if event.Has(fsnotify.Write) &&
 					(strings.HasSuffix(event.Name, "ini") ||
 						strings.HasSuffix(event.Name, "cam") ||

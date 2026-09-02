@@ -34,9 +34,23 @@ func NewWebserver(addr string) *Webserver {
 	}
 }
 
-func (w *Webserver) RegisterBriefingEndpoints(iniPath string) {
-	w.logger.Infof("Registering briefing endpoints")
-	w.logger.Infof("callsign.ini file: %s", iniPath)
+func (w *Webserver) RegisterBriefingEndpoint(briefingPath string) {
+	w.logger.Infof("Registering briefing endpoint: %s", briefingPath)
+	w.r.GET("/briefing", func(c *gin.Context) {
+		log.Printf("briefing.txt requested")
+		if _, err := os.Stat(briefingPath); os.IsNotExist(err) {
+			c.String(http.StatusNotFound, briefingPath+" not found")
+			return
+		}
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, post-check=0, pre-check=0")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+		c.File(briefingPath)
+	})
+}
+
+func (w *Webserver) RegisterIniEndpoint(iniPath string) {
+	w.logger.Infof("Registering callsign.ini endpoint: %s", iniPath)
 	w.r.GET("/ini", func(c *gin.Context) {
 		log.Printf("callsign.ini requested")
 		if _, err := os.Stat(iniPath); os.IsNotExist(err) {

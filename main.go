@@ -38,7 +38,9 @@ func main() {
 	ws.RegisterMissionResourceEndpoints(manager)
 
 	iniPath := filepath.Join(cfg.FalconBase, `User\Config`, cfg.Callsign+".ini")
-	ws.RegisterBriefingEndpoints(iniPath)
+	briefingPath := filepath.Join(cfg.FalconBase, `User\Briefing`, "briefing.txt")
+	ws.RegisterIniEndpoint(iniPath)
+	ws.RegisterBriefingEndpoint(briefingPath)
 
 	hub := NewWebsocketHub()
 	go hub.run()
@@ -47,7 +49,10 @@ func main() {
 	watcher, err := NewFileWatcher(hub, cfg.FsCheckFreq)
 	if err == nil {
 		watcher.Add(iniPath)
-		watcher.Add(cfg.FalconBase + "/Data" + string(camtac.Korea) + "/Campaign")
+		watcher.Add(briefingPath)
+		for _, s := range []camtac.Theater{camtac.Korea, camtac.Balkans, camtac.Israel, camtac.Hellas} {
+			watcher.Add(cfg.FalconBase + "/Data" + string(s) + "/Campaign")
+		}
 		watcher.Start()
 	}
 
