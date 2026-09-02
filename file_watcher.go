@@ -50,8 +50,8 @@ func (fw *FileWatcher) Add(path string) {
 func (fw *FileWatcher) Start() {
 	go func() {
 		var (
-			debounceTimer *time.Timer
-			mu            sync.Mutex
+			debounceTimers = make(map[string]*time.Timer)
+			mu             sync.Mutex
 		)
 		for {
 			select {
@@ -61,15 +61,24 @@ func (fw *FileWatcher) Start() {
 					return
 				}
 				if event.Has(fsnotify.Write) &&
-					(strings.HasSuffix(event.Name, "ini") ||
+					(strings.HasSuffix(event.Name, "briefing.txt") ||
+						strings.HasSuffix(event.Name, "ini") ||
 						strings.HasSuffix(event.Name, "cam") ||
 						strings.HasSuffix(event.Name, "tac")) {
+					fileName := event.Name
 					mu.Lock()
-					if debounceTimer != nil {
-						debounceTimer.Stop()
+					if timer, exists := debounceTimers[fileName]; exists && timer != nil {
+						timer.Stop()
 					}
-					debounceTimer = time.AfterFunc(time.Duration(fw.fsCheckFreq)*time.Millisecond, func() {
-						fw.logger.Debugf("broadcasting update: %s", event.Name)
+					var timer *time.Timer
+					timer = time.AfterFunc(time.Duration(fw.fsCheckFreq)*time.Millisecond, func() {
+						mu.Lock()
+						if debounceTimers[fileName] == timer {
+							delete(debounceTimers, fileName)
+						}
+						mu.Unlock()
+
+						fw.logger.Infof("broadcasting update: %s", fileName)
 						msg := AgentMessage{
 							Type: "update",
 						}
@@ -80,6 +89,7 @@ func (fw *FileWatcher) Start() {
 						}
 						fw.hub.broadcast <- data
 					})
+					debounceTimers[fileName] = timer
 					mu.Unlock()
 				}
 			case err, ok := <-fw.watcher.Errors:

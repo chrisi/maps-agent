@@ -38,7 +38,7 @@ func main() {
 	ws.RegisterMissionResourceEndpoints(manager)
 
 	iniPath := filepath.Join(cfg.FalconBase, `User\Config`, cfg.Callsign+".ini")
-	briefingPath := filepath.Join(cfg.FalconBase, `User\Briefing`, "briefing.txt")
+	briefingPath := filepath.Join(cfg.FalconBase, `User\Briefings`, "briefing.txt")
 	ws.RegisterIniEndpoint(iniPath)
 	ws.RegisterBriefingEndpoint(briefingPath)
 
