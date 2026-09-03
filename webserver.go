@@ -64,6 +64,21 @@ func (w *Webserver) RegisterIniEndpoint(iniPath string) {
 	})
 }
 
+func (w *Webserver) RegisterFlightEndpoint(fm *FlightManager) {
+	w.logger.Infof("Registering flight endpoint: /flight")
+	w.r.GET("/flight", func(c *gin.Context) {
+		flight := fm.GetCurrentFlight()
+		if flight == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no flight data available"})
+			return
+		}
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, post-check=0, pre-check=0")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+		c.JSON(http.StatusOK, flight)
+	})
+}
+
 func getTheater(theater string) (camtac.Theater, error) {
 	s := strings.ToLower(theater)
 	switch s {

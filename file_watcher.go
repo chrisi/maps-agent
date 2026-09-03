@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"maps-agent/util"
 	"os"
 	"strings"
@@ -14,11 +13,12 @@ import (
 type FileWatcher struct {
 	logger      *util.Logger
 	watcher     *fsnotify.Watcher
-	hub         *WebsocketHub
 	fsCheckFreq int
+	callbacks   []func(string)
+	mu          sync.Mutex
 }
 
-func NewFileWatcher(hub *WebsocketHub, fsCheckFreq int) (*FileWatcher, error) {
+func NewFileWatcher(fsCheckFreq int, callbacks ...func(string)) (*FileWatcher, error) {
 	logger := util.NewLogger("FileWatcher", os.Stdout, util.Debug, true)
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -28,9 +28,15 @@ func NewFileWatcher(hub *WebsocketHub, fsCheckFreq int) (*FileWatcher, error) {
 	return &FileWatcher{
 		logger:      logger,
 		watcher:     watcher,
-		hub:         hub,
 		fsCheckFreq: fsCheckFreq,
+		callbacks:   callbacks,
 	}, nil
+}
+
+func (fw *FileWatcher) OnChange(cb func(string)) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.callbacks = append(fw.callbacks, cb)
 }
 
 func (fw *FileWatcher) Stop() {
@@ -78,16 +84,8 @@ func (fw *FileWatcher) Start() {
 						}
 						mu.Unlock()
 
-						fw.logger.Infof("broadcasting update: %s", fileName)
-						msg := AgentMessage{
-							Type: "update",
-						}
-						data, err := json.Marshal(msg)
-						if err != nil {
-							fw.logger.Errorf("error serializing update: %v", err)
-							return
-						}
-						fw.hub.broadcast <- data
+						fw.logger.Infof("file changed: %s", fileName)
+						fw.notifyCallbacks(fileName)
 					})
 					debounceTimers[fileName] = timer
 					mu.Unlock()
@@ -100,4 +98,15 @@ func (fw *FileWatcher) Start() {
 			}
 		}
 	}()
+}
+
+func (fw *FileWatcher) notifyCallbacks(fileName string) {
+	fw.mu.Lock()
+	callbacks := make([]func(string), len(fw.callbacks))
+	copy(callbacks, fw.callbacks)
+	fw.mu.Unlock()
+
+	for _, cb := range callbacks {
+		cb(fileName)
+	}
 }

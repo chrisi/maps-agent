@@ -46,7 +46,11 @@ func main() {
 	go hub.run()
 	ws.RegisterWebsocketEndpoint(hub)
 
-	watcher, err := NewFileWatcher(hub, cfg.FsCheckFreq)
+	threshold := time.Duration(cfg.FlightMatchThreshold) * time.Second
+	flightManager := NewFlightManager(hub, cfg.Callsign, iniPath, briefingPath, threshold)
+	ws.RegisterFlightEndpoint(flightManager)
+
+	watcher, err := NewFileWatcher(cfg.FsCheckFreq, flightManager.HandleFileChange)
 	if err == nil {
 		watcher.Add(iniPath)
 		watcher.Add(briefingPath)
@@ -99,7 +103,9 @@ func main() {
 	}
 
 	ws.Start()
-	watcher.Stop()
+	if watcher != nil {
+		watcher.Stop()
+	}
 }
 
 func minimizeObjectives(objectives []*camtac.Objective) []*Objective {
