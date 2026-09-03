@@ -6,18 +6,17 @@ import (
 )
 
 type Config struct {
-	FalconBase           string
-	Callsign             string
-	ServerAddr           string
-	Imcs                 bool
-	ImcsServer           string
-	ImcsSession          string
-	ReadSharedMem        bool
-	PosUpdateFreq        int
-	FsCheckFreq          int
-	FlightMatchThreshold int
-	MissionFilename      string
-	ExportJsonDir        string
+	FalconBase      string
+	Callsign        string
+	ServerAddr      string
+	Imcs            bool
+	ImcsServer      string
+	ImcsSession     string
+	ReadSharedMem   bool
+	PosUpdateFreq   int
+	FsCheckFreq     int
+	MissionFilename string
+	ExportJsonDir   string
 }
 
 func parseConfig() Config {
@@ -35,7 +34,6 @@ func parseConfig() Config {
 	readSharedMem := flag.Bool("shared-mem", false, "Read Falcon BMS Shared memory and broadcast them")
 	fsCheckFreqStr := flag.String("fs-check-freq", "1000", "Milliseconds between checking file system for changes")
 	posUpdateFreqStr := flag.String("pos-update-freq", "250", "Milliseconds between sending position updates")
-	flightMatchThreshold := flag.Int("flight-match-threshold", 30, "Threshold in seconds to correlate ini and briefing files")
 	serverAddr := flag.String("addr", defaultServerAddr, "HTTP service address")
 	missionFilename := flag.String("mission-load", "", "Read CAM/TAC file")
 	exportJsonDir := flag.String("mission-export", "", "Export mission data to directory")
@@ -46,17 +44,16 @@ func parseConfig() Config {
 	flag.Parse()
 
 	return Config{
-		FalconBase:           *falconBase,
-		Callsign:             *callsign,
-		ServerAddr:           *serverAddr,
-		Imcs:                 *imcs,
-		ImcsServer:           *imcsServer,
-		ImcsSession:          *imcsSession,
-		ReadSharedMem:        *readSharedMem,
-		PosUpdateFreq:        posUpdateFreq,
-		FsCheckFreq:          fsCheckFreq,
-		FlightMatchThreshold: *flightMatchThreshold,
-		MissionFilename:      *missionFilename,
-		ExportJsonDir:        *exportJsonDir,
+		FalconBase:      *falconBase,
+		Callsign:        *callsign,
+		ServerAddr:      *serverAddr,
+		Imcs:            *imcs,
+		ImcsServer:      *imcsServer,
+		ImcsSession:     *imcsSession,
+		ReadSharedMem:   *readSharedMem,
+		PosUpdateFreq:   posUpdateFreq,
+		FsCheckFreq:     fsCheckFreq,
+		MissionFilename: *missionFilename,
+		ExportJsonDir:   *exportJsonDir,
 	}
 }

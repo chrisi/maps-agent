@@ -26,50 +26,31 @@ type MissionReadyPayload struct {
 	Message  string `json:"message"`
 }
 
-// FlightManager manages flight data collection from ini and briefing files,
-// correlates their updates based on a time threshold, and broadcasts WebSocket update events.
+// FlightManager manages flight data collection from ini and briefing files
+// and broadcasts WebSocket update events according to the mission state machine.
 type FlightManager struct {
-	logger              *util.Logger
-	hub                 *WebsocketHub
-	callsign            string
-	iniPath             string
-	briefingPath        string
-	threshold           time.Duration
-	lastIniSave         time.Time
-	lastIniContent      string
-	lastBriefingSave    time.Time
-	lastBriefingContent string
-	currentFlight       *FlightData
-	mu                  sync.RWMutex
+	logger          *util.Logger
+	hub             *WebsocketHub
+	callsign        string
+	iniPath         string
+	briefingPath    string
+	hasIni          bool
+	iniContent      string
+	hasBriefing     bool
+	briefingContent string
+	currentFlight   *FlightData
+	mu              sync.RWMutex
 }
 
 // NewFlightManager creates a new FlightManager instance.
-func NewFlightManager(hub *WebsocketHub, callsign, iniPath, briefingPath string, threshold time.Duration) *FlightManager {
-	if threshold <= 0 {
-		threshold = 30 * time.Second
-	}
+func NewFlightManager(hub *WebsocketHub, callsign, iniPath, briefingPath string) *FlightManager {
 	return &FlightManager{
 		logger:       util.NewLogger("FlightManager", os.Stdout, util.Info, true),
 		hub:          hub,
 		callsign:     callsign,
 		iniPath:      iniPath,
 		briefingPath: briefingPath,
-		threshold:    threshold,
 	}
-}
-
-// SetThreshold updates the time threshold for correlating ini and briefing file changes.
-func (fm *FlightManager) SetThreshold(threshold time.Duration) {
-	fm.mu.Lock()
-	defer fm.mu.Unlock()
-	fm.threshold = threshold
-}
-
-// GetThreshold returns the current correlation threshold.
-func (fm *FlightManager) GetThreshold() time.Duration {
-	fm.mu.RLock()
-	defer fm.mu.RUnlock()
-	return fm.threshold
 }
 
 // GetCurrentFlight returns the currently stored flight data.
@@ -103,8 +84,9 @@ func (fm *FlightManager) HandleFileChange(filePath string) {
 	}
 }
 
-// HandleIniChange records the modification of the callsign.ini file.
-// If briefing.txt was saved within the threshold, it correlates both files, updates current flight data, and broadcasts a WebSocket update event.
+// HandleIniChange processes saving of the callsign.ini file.
+// If a briefing is already present, the INI is adopted, current flight updated, and an event is sent.
+// If no briefing is present yet, the INI is stored and we wait for the briefing.
 func (fm *FlightManager) HandleIniChange(filePath string) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -115,52 +97,36 @@ func (fm *FlightManager) HandleIniChange(filePath string) {
 	iniContent := string(content)
 
 	fm.mu.Lock()
-	fm.lastIniSave = time.Now()
-	fm.lastIniContent = iniContent
-	iniSaveTime := fm.lastIniSave
+	fm.hasIni = true
+	fm.iniContent = iniContent
 
-	lastBriefingSave := fm.lastBriefingSave
-	lastBriefingContent := fm.lastBriefingContent
-	threshold := fm.threshold
-	fm.mu.Unlock()
-
-	if lastBriefingSave.IsZero() {
-		fm.logger.Infof("Recorded %s change at %v (waiting for briefing.txt within %v)", filepath.Base(filePath), iniSaveTime, threshold)
+	if !fm.hasBriefing {
+		fm.mu.Unlock()
+		fm.logger.Infof("Recorded %s change (waiting for briefing.txt)", filepath.Base(filePath))
 		return
-	}
-
-	elapsed := time.Since(lastBriefingSave)
-	if elapsed > threshold {
-		fm.logger.Infof("Recorded %s change at %v (briefing.txt was saved %v ago, threshold: %v; waiting for new briefing.txt)",
-			filepath.Base(filePath), iniSaveTime, elapsed.Round(time.Millisecond), threshold)
-		return
-	}
-
-	if lastBriefingContent == "" && fm.briefingPath != "" {
-		if briefingBytes, err := os.ReadFile(fm.briefingPath); err == nil {
-			lastBriefingContent = string(briefingBytes)
-		}
 	}
 
 	flight := &FlightData{
 		Callsign:  fm.callsign,
-		Ini:       iniContent,
-		Briefing:  lastBriefingContent,
+		Ini:       fm.iniContent,
+		Briefing:  fm.briefingContent,
 		UpdatedAt: time.Now(),
 	}
-
-	fm.mu.Lock()
 	fm.currentFlight = flight
 	fm.mu.Unlock()
 
-	fm.logger.Infof("Correlated flight files (briefing.txt was saved %v ago). Broadcasting mission ready update.",
-		elapsed.Round(time.Millisecond))
-
+	fm.logger.Infof("Correlated flight files (%s.ini and briefing.txt). Broadcasting mission ready update.", fm.callsign)
 	fm.BroadcastMissionReady()
 }
 
-// HandleBriefingChange records the modification of the briefing.txt file.
-// If callsign.ini was saved within the threshold, it correlates both files, updates current flight data, and broadcasts a WebSocket update event.
+// HandleBriefingChange processes saving of the briefing.txt file.
+// If a briefing was already saved, the content is compared:
+//   - If identical, nothing happens.
+//   - If different, the new briefing is adopted and previously saved INI data is cleared.
+//
+// If no briefing was saved previously:
+//   - If an INI is present, the briefing is adopted and an event is sent.
+//   - If no INI is present, the briefing is adopted and we wait for the INI.
 func (fm *FlightManager) HandleBriefingChange(filePath string) {
 	briefingBytes, err := os.ReadFile(filePath)
 	if err != nil {
@@ -171,47 +137,44 @@ func (fm *FlightManager) HandleBriefingChange(filePath string) {
 	briefingContent := string(briefingBytes)
 
 	fm.mu.Lock()
-	fm.lastBriefingSave = time.Now()
-	fm.lastBriefingContent = briefingContent
-	briefingSaveTime := fm.lastBriefingSave
-
-	lastIniSave := fm.lastIniSave
-	lastIniContent := fm.lastIniContent
-	threshold := fm.threshold
-	fm.mu.Unlock()
-
-	if lastIniSave.IsZero() {
-		fm.logger.Infof("Recorded %s change at %v (waiting for %s.ini within %v)", filepath.Base(filePath), briefingSaveTime, fm.callsign, threshold)
-		return
-	}
-
-	elapsed := time.Since(lastIniSave)
-	if elapsed > threshold {
-		fm.logger.Infof("Recorded %s change at %v (%s.ini was saved %v ago, threshold: %v; waiting for new %s.ini)",
-			filepath.Base(filePath), briefingSaveTime, fm.callsign, elapsed.Round(time.Millisecond), threshold, fm.callsign)
-		return
-	}
-
-	if lastIniContent == "" && fm.iniPath != "" {
-		if iniBytes, err := os.ReadFile(fm.iniPath); err == nil {
-			lastIniContent = string(iniBytes)
+	if fm.hasBriefing {
+		if fm.briefingContent == briefingContent {
+			fm.mu.Unlock()
+			fm.logger.Infof("Briefing content unchanged; ignoring event")
+			return
 		}
+
+		// Content differs: adopt new briefing and clear saved INI data
+		fm.briefingContent = briefingContent
+		fm.hasIni = false
+		fm.iniContent = ""
+		fm.currentFlight = nil
+		fm.mu.Unlock()
+
+		fm.logger.Infof("Briefing content changed; updated briefing and cleared INI data (waiting for %s.ini)", fm.callsign)
+		return
+	}
+
+	// First time briefing is saved
+	fm.hasBriefing = true
+	fm.briefingContent = briefingContent
+
+	if !fm.hasIni {
+		fm.mu.Unlock()
+		fm.logger.Infof("Recorded %s change (waiting for %s.ini)", filepath.Base(filePath), fm.callsign)
+		return
 	}
 
 	flight := &FlightData{
 		Callsign:  fm.callsign,
-		Ini:       lastIniContent,
-		Briefing:  briefingContent,
+		Ini:       fm.iniContent,
+		Briefing:  fm.briefingContent,
 		UpdatedAt: time.Now(),
 	}
-
-	fm.mu.Lock()
 	fm.currentFlight = flight
 	fm.mu.Unlock()
 
-	fm.logger.Infof("Correlated flight files (%s.ini was saved %v ago). Broadcasting mission ready update.",
-		fm.callsign, elapsed.Round(time.Millisecond))
-
+	fm.logger.Infof("Correlated flight files (%s.ini and briefing.txt). Broadcasting mission ready update.", fm.callsign)
 	fm.BroadcastMissionReady()
 }
 

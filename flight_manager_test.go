@@ -12,35 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestFlightManager_IniChangeDoesNotBroadcast(t *testing.T) {
-	tempDir := t.TempDir()
-	iniPath := filepath.Join(tempDir, "Viper.ini")
-	briefingPath := filepath.Join(tempDir, "briefing.txt")
-
-	err := os.WriteFile(iniPath, []byte("[Pilot]\nCallsign=Viper\n"), 0644)
-	if err != nil {
-		t.Fatalf("failed to write ini file: %v", err)
-	}
-
-	hub := NewWebsocketHub()
-	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath, 30*time.Second)
-
-	// Listen for broadcast messages on hub.broadcast in a non-blocking way
-	fm.HandleFileChange(iniPath)
-
-	select {
-	case msg := <-hub.broadcast:
-		t.Fatalf("expected no broadcast after ini change, got: %s", string(msg))
-	case <-time.After(50 * time.Millisecond):
-		// Expected: no message sent
-	}
-
-	if fm.GetCurrentFlight() != nil {
-		t.Fatalf("expected current flight to be nil before briefing is saved")
-	}
-}
-
-func TestFlightManager_BriefingWithinThresholdCorrelatesAndBroadcasts(t *testing.T) {
+func TestFlightManager_IniFirstThenBriefing_CorrelatesAndBroadcasts(t *testing.T) {
 	tempDir := t.TempDir()
 	iniPath := filepath.Join(tempDir, "Viper.ini")
 	briefingPath := filepath.Join(tempDir, "briefing.txt")
@@ -58,13 +30,23 @@ func TestFlightManager_BriefingWithinThresholdCorrelatesAndBroadcasts(t *testing
 	}
 
 	hub := NewWebsocketHub()
-	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath, 5*time.Second)
+	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath)
 
-	// Step 1: ini changed
+	// Step 1: INI saved first when nothing was saved before -> no event, waiting for briefing
 	fm.HandleFileChange(iniPath)
 
-	// Step 2: briefing changed shortly after
-	time.Sleep(10 * time.Millisecond)
+	select {
+	case msg := <-hub.broadcast:
+		t.Fatalf("expected no broadcast after initial ini change, got: %s", string(msg))
+	case <-time.After(50 * time.Millisecond):
+		// Expected: no event sent
+	}
+
+	if fm.GetCurrentFlight() != nil {
+		t.Fatalf("expected current flight to be nil before briefing is saved")
+	}
+
+	// Step 2: Briefing saved when INI is already present -> event sent, flight data populated
 	go fm.HandleFileChange(briefingPath)
 
 	select {
@@ -106,62 +88,7 @@ func TestFlightManager_BriefingWithinThresholdCorrelatesAndBroadcasts(t *testing
 	}
 }
 
-func TestFlightManager_BriefingExceedingThresholdDoesNotCorrelate(t *testing.T) {
-	tempDir := t.TempDir()
-	iniPath := filepath.Join(tempDir, "Viper.ini")
-	briefingPath := filepath.Join(tempDir, "briefing.txt")
-
-	_ = os.WriteFile(iniPath, []byte("ini data"), 0644)
-	_ = os.WriteFile(briefingPath, []byte("briefing data"), 0644)
-
-	hub := NewWebsocketHub()
-	// Set threshold very short: 10ms
-	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath, 10*time.Millisecond)
-
-	fm.HandleFileChange(iniPath)
-
-	// Wait longer than threshold
-	time.Sleep(30 * time.Millisecond)
-
-	fm.HandleFileChange(briefingPath)
-
-	select {
-	case msg := <-hub.broadcast:
-		t.Fatalf("expected no broadcast when threshold is exceeded, got: %s", string(msg))
-	case <-time.After(50 * time.Millisecond):
-		// Expected: no message sent
-	}
-
-	if fm.GetCurrentFlight() != nil {
-		t.Fatalf("expected current flight to remain nil when threshold exceeded")
-	}
-}
-
-func TestFlightManager_BriefingWithoutIniDoesNotBroadcast(t *testing.T) {
-	tempDir := t.TempDir()
-	iniPath := filepath.Join(tempDir, "Viper.ini")
-	briefingPath := filepath.Join(tempDir, "briefing.txt")
-
-	_ = os.WriteFile(briefingPath, []byte("briefing data"), 0644)
-
-	hub := NewWebsocketHub()
-	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath, 30*time.Second)
-
-	fm.HandleFileChange(briefingPath)
-
-	select {
-	case msg := <-hub.broadcast:
-		t.Fatalf("expected no broadcast when no ini save recorded, got: %s", string(msg))
-	case <-time.After(50 * time.Millisecond):
-		// Expected: no message sent
-	}
-
-	if fm.GetCurrentFlight() != nil {
-		t.Fatalf("expected current flight to remain nil")
-	}
-}
-
-func TestFlightManager_IniAfterBriefingWithinThresholdCorrelatesAndBroadcasts(t *testing.T) {
+func TestFlightManager_BriefingFirstThenIni_CorrelatesAndBroadcasts(t *testing.T) {
 	tempDir := t.TempDir()
 	iniPath := filepath.Join(tempDir, "Viper.ini")
 	briefingPath := filepath.Join(tempDir, "briefing.txt")
@@ -179,13 +106,23 @@ func TestFlightManager_IniAfterBriefingWithinThresholdCorrelatesAndBroadcasts(t 
 	}
 
 	hub := NewWebsocketHub()
-	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath, 5*time.Second)
+	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath)
 
-	// Step 1: briefing changed first
+	// Step 1: Briefing saved when no INI is present -> no event, waiting for INI
 	fm.HandleFileChange(briefingPath)
 
-	// Step 2: ini changed shortly after
-	time.Sleep(10 * time.Millisecond)
+	select {
+	case msg := <-hub.broadcast:
+		t.Fatalf("expected no broadcast after initial briefing change without INI, got: %s", string(msg))
+	case <-time.After(50 * time.Millisecond):
+		// Expected: no event sent
+	}
+
+	if fm.GetCurrentFlight() != nil {
+		t.Fatalf("expected current flight to be nil before INI is saved")
+	}
+
+	// Step 2: INI saved when Briefing is present -> event sent, flight data populated
 	go fm.HandleFileChange(iniPath)
 
 	select {
@@ -197,17 +134,6 @@ func TestFlightManager_IniAfterBriefingWithinThresholdCorrelatesAndBroadcasts(t 
 		if agentMsg.Type != "update" {
 			t.Errorf("expected msg type 'update', got '%s'", agentMsg.Type)
 		}
-		payloadBytes, err := json.Marshal(agentMsg.Payload)
-		if err != nil {
-			t.Fatalf("failed to marshal payload: %v", err)
-		}
-		var readyPayload MissionReadyPayload
-		if err := json.Unmarshal(payloadBytes, &readyPayload); err != nil {
-			t.Fatalf("failed to unmarshal ready payload: %v", err)
-		}
-		if readyPayload.Status != "ready" || readyPayload.Endpoint != "/flight" {
-			t.Errorf("unexpected payload: %+v", readyPayload)
-		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatalf("timed out waiting for broadcast message")
 	}
@@ -216,45 +142,148 @@ func TestFlightManager_IniAfterBriefingWithinThresholdCorrelatesAndBroadcasts(t 
 	if flight == nil {
 		t.Fatalf("expected current flight data to be set")
 	}
-	if flight.Callsign != "Viper" {
-		t.Errorf("expected callsign 'Viper', got '%s'", flight.Callsign)
-	}
-	if flight.Ini != iniContent {
-		t.Errorf("expected ini content '%s', got '%s'", iniContent, flight.Ini)
-	}
-	if flight.Briefing != briefingContent {
-		t.Errorf("expected briefing content '%s', got '%s'", briefingContent, flight.Briefing)
+	if flight.Ini != iniContent || flight.Briefing != briefingContent {
+		t.Errorf("unexpected flight content: %+v", flight)
 	}
 }
 
-func TestFlightManager_IniAfterBriefingExceedingThresholdDoesNotCorrelate(t *testing.T) {
+func TestFlightManager_IniRepeatedWithBriefingPresent_IsIdempotentAndBroadcasts(t *testing.T) {
 	tempDir := t.TempDir()
 	iniPath := filepath.Join(tempDir, "Viper.ini")
 	briefingPath := filepath.Join(tempDir, "briefing.txt")
 
-	_ = os.WriteFile(iniPath, []byte("ini data"), 0644)
-	_ = os.WriteFile(briefingPath, []byte("briefing data"), 0644)
+	iniContent1 := "[Pilot]\nCallsign=Viper\nLoadout=1\n"
+	iniContent2 := "[Pilot]\nCallsign=Viper\nLoadout=2\n"
+	briefingContent := "MISSION BRIEFING:\nTarget: Airbase\n"
+
+	_ = os.WriteFile(iniPath, []byte(iniContent1), 0644)
+	_ = os.WriteFile(briefingPath, []byte(briefingContent), 0644)
 
 	hub := NewWebsocketHub()
-	// Set threshold very short: 10ms
-	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath, 10*time.Millisecond)
+	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath)
 
+	// Step 1: Briefing saved first
 	fm.HandleFileChange(briefingPath)
 
-	// Wait longer than threshold
-	time.Sleep(30 * time.Millisecond)
+	// Step 2: INI 1 saved -> event 1
+	go fm.HandleFileChange(iniPath)
+	select {
+	case <-hub.broadcast:
+		// OK
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timed out waiting for first broadcast")
+	}
+	if fm.GetCurrentFlight().Ini != iniContent1 {
+		t.Errorf("expected ini content 1, got %s", fm.GetCurrentFlight().Ini)
+	}
 
-	fm.HandleFileChange(iniPath)
+	// Step 3: INI 2 saved (repeated) -> event 2
+	_ = os.WriteFile(iniPath, []byte(iniContent2), 0644)
+	go fm.HandleFileChange(iniPath)
+	select {
+	case <-hub.broadcast:
+		// OK
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timed out waiting for second broadcast")
+	}
+	if fm.GetCurrentFlight().Ini != iniContent2 {
+		t.Errorf("expected ini content 2, got %s", fm.GetCurrentFlight().Ini)
+	}
+}
+
+func TestFlightManager_BriefingIdentical_DoesNothing(t *testing.T) {
+	tempDir := t.TempDir()
+	iniPath := filepath.Join(tempDir, "Viper.ini")
+	briefingPath := filepath.Join(tempDir, "briefing.txt")
+
+	iniContent := "[Pilot]\nCallsign=Viper\n"
+	briefingContent := "MISSION BRIEFING:\nTarget: Airbase\n"
+
+	_ = os.WriteFile(iniPath, []byte(iniContent), 0644)
+	_ = os.WriteFile(briefingPath, []byte(briefingContent), 0644)
+
+	hub := NewWebsocketHub()
+	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath)
+
+	// Initial correlation: Briefing + INI
+	fm.HandleFileChange(briefingPath)
+	go fm.HandleFileChange(iniPath)
+	<-hub.broadcast
+
+	// Now save the exact same briefing content again
+	fm.HandleFileChange(briefingPath)
 
 	select {
 	case msg := <-hub.broadcast:
-		t.Fatalf("expected no broadcast when threshold is exceeded, got: %s", string(msg))
+		t.Fatalf("expected no broadcast when identical briefing is saved, got: %s", string(msg))
 	case <-time.After(50 * time.Millisecond):
-		// Expected: no message sent
+		// Expected: nothing happens
+	}
+
+	// Flight data should still be intact
+	flight := fm.GetCurrentFlight()
+	if flight == nil || flight.Ini != iniContent {
+		t.Fatalf("expected flight data to remain unchanged")
+	}
+}
+
+func TestFlightManager_BriefingChanged_ClearsIniAndDoesNotBroadcast(t *testing.T) {
+	tempDir := t.TempDir()
+	iniPath := filepath.Join(tempDir, "Viper.ini")
+	briefingPath := filepath.Join(tempDir, "briefing.txt")
+
+	iniContent1 := "[Pilot]\nCallsign=Viper\nMission=1\n"
+	briefingContent1 := "MISSION BRIEFING 1:\nTarget: Airbase\n"
+
+	iniContent2 := "[Pilot]\nCallsign=Viper\nMission=2\n"
+	briefingContent2 := "MISSION BRIEFING 2:\nTarget: Bridge\n"
+
+	_ = os.WriteFile(iniPath, []byte(iniContent1), 0644)
+	_ = os.WriteFile(briefingPath, []byte(briefingContent1), 0644)
+
+	hub := NewWebsocketHub()
+	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath)
+
+	// Step 1: Correlate initial mission (Briefing 1 + INI 1)
+	fm.HandleFileChange(briefingPath)
+	go fm.HandleFileChange(iniPath)
+	<-hub.broadcast
+	if fm.GetCurrentFlight() == nil || fm.GetCurrentFlight().Briefing != briefingContent1 {
+		t.Fatalf("expected flight with briefing 1")
+	}
+
+	// Step 2: Save Briefing 2 (different content) -> INI data cleared, current flight nil, no event
+	_ = os.WriteFile(briefingPath, []byte(briefingContent2), 0644)
+	fm.HandleFileChange(briefingPath)
+
+	select {
+	case msg := <-hub.broadcast:
+		t.Fatalf("expected no broadcast when briefing content changes, got: %s", string(msg))
+	case <-time.After(50 * time.Millisecond):
+		// Expected: no event
 	}
 
 	if fm.GetCurrentFlight() != nil {
-		t.Fatalf("expected current flight to remain nil when threshold exceeded")
+		t.Fatalf("expected current flight to be nil after briefing changed and INI was cleared")
+	}
+
+	// Step 3: Save INI 2 -> now correlates with Briefing 2 and sends event
+	_ = os.WriteFile(iniPath, []byte(iniContent2), 0644)
+	go fm.HandleFileChange(iniPath)
+
+	select {
+	case <-hub.broadcast:
+		// OK
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timed out waiting for broadcast after new INI saved")
+	}
+
+	flight := fm.GetCurrentFlight()
+	if flight == nil {
+		t.Fatalf("expected flight data to be set")
+	}
+	if flight.Briefing != briefingContent2 || flight.Ini != iniContent2 {
+		t.Errorf("expected briefing 2 and ini 2, got: %+v", flight)
 	}
 }
 
@@ -263,7 +292,7 @@ func TestWebserver_FlightEndpoint(t *testing.T) {
 	ws := NewWebserver(":0")
 
 	hub := NewWebsocketHub()
-	fm := NewFlightManager(hub, "Viper", "", "", 30*time.Second)
+	fm := NewFlightManager(hub, "Viper", "", "")
 	ws.RegisterFlightEndpoint(fm)
 
 	// 1. When no flight data is present -> 404

@@ -46,8 +46,7 @@ func main() {
 	go hub.run()
 	ws.RegisterWebsocketEndpoint(hub)
 
-	threshold := time.Duration(cfg.FlightMatchThreshold) * time.Second
-	flightManager := NewFlightManager(hub, cfg.Callsign, iniPath, briefingPath, threshold)
+	flightManager := NewFlightManager(hub, cfg.Callsign, iniPath, briefingPath)
 	ws.RegisterFlightEndpoint(flightManager)
 
 	watcher, err := NewFileWatcher(cfg.FsCheckFreq, flightManager.HandleFileChange)
