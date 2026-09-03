@@ -120,7 +120,7 @@ func (fm *FlightManager) HandleIniChange(filePath string) {
 }
 
 // HandleBriefingChange processes saving of the briefing.txt file.
-// If a briefing was already saved, the content is compared:
+// If a briefing was already saved, the content is compared (ignoring line 2, which contains the generation timestamp):
 //   - If identical, nothing happens.
 //   - If different, the new briefing is adopted and previously saved INI data is cleared.
 //
@@ -138,9 +138,9 @@ func (fm *FlightManager) HandleBriefingChange(filePath string) {
 
 	fm.mu.Lock()
 	if fm.hasBriefing {
-		if fm.briefingContent == briefingContent {
+		if isBriefingEqual(fm.briefingContent, briefingContent) {
 			fm.mu.Unlock()
-			fm.logger.Infof("Briefing content unchanged; ignoring event")
+			fm.logger.Infof("Briefing content unchanged (ignoring timestamp line); ignoring event")
 			return
 		}
 
@@ -176,6 +176,27 @@ func (fm *FlightManager) HandleBriefingChange(filePath string) {
 
 	fm.logger.Infof("Correlated flight files (%s.ini and briefing.txt). Broadcasting mission ready update.", fm.callsign)
 	fm.BroadcastMissionReady()
+}
+
+// isBriefingEqual compares two briefing strings ignoring the second line (generation timestamp)
+// and normalizing line endings.
+func isBriefingEqual(a, b string) bool {
+	if a == b {
+		return true
+	}
+	return normalizeBriefingForComparison(a) == normalizeBriefingForComparison(b)
+}
+
+// normalizeBriefingForComparison normalizes line endings and removes the second line (index 1)
+// representing the generation timestamp of the briefing.
+func normalizeBriefingForComparison(content string) string {
+	normalized := strings.ReplaceAll(content, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	lines := strings.Split(normalized, "\n")
+	if len(lines) >= 2 {
+		lines = append(lines[:1], lines[2:]...)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // BroadcastMissionReady sends a WebSocket update event notifying clients that the mission can be downloaded.

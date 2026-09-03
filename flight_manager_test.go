@@ -197,7 +197,7 @@ func TestFlightManager_BriefingIdentical_DoesNothing(t *testing.T) {
 	briefingPath := filepath.Join(tempDir, "briefing.txt")
 
 	iniContent := "[Pilot]\nCallsign=Viper\n"
-	briefingContent := "MISSION BRIEFING:\nTarget: Airbase\n"
+	briefingContent := "MISSION BRIEFING:\nGenerated: 2026-09-03 12:00:00\nTarget: Airbase\n"
 
 	_ = os.WriteFile(iniPath, []byte(iniContent), 0644)
 	_ = os.WriteFile(briefingPath, []byte(briefingContent), 0644)
@@ -224,6 +224,111 @@ func TestFlightManager_BriefingIdentical_DoesNothing(t *testing.T) {
 	flight := fm.GetCurrentFlight()
 	if flight == nil || flight.Ini != iniContent {
 		t.Fatalf("expected flight data to remain unchanged")
+	}
+}
+
+func TestFlightManager_BriefingTimestampLineDifferenceOnly_DoesNothing(t *testing.T) {
+	tempDir := t.TempDir()
+	iniPath := filepath.Join(tempDir, "Viper.ini")
+	briefingPath := filepath.Join(tempDir, "briefing.txt")
+
+	iniContent := "[Pilot]\nCallsign=Viper\n"
+	briefingContent1 := "MISSION BRIEFING:\nGenerated: 2026-09-03 12:00:00\nTarget: Airbase\n"
+	briefingContent2 := "MISSION BRIEFING:\nGenerated: 2026-09-03 12:05:30\nTarget: Airbase\n"
+
+	_ = os.WriteFile(iniPath, []byte(iniContent), 0644)
+	_ = os.WriteFile(briefingPath, []byte(briefingContent1), 0644)
+
+	hub := NewWebsocketHub()
+	fm := NewFlightManager(hub, "Viper", iniPath, briefingPath)
+
+	// Initial correlation: Briefing 1 + INI
+	fm.HandleFileChange(briefingPath)
+	go fm.HandleFileChange(iniPath)
+	<-hub.broadcast
+
+	// Now save briefing 2 which only differs in line 2 (timestamp)
+	_ = os.WriteFile(briefingPath, []byte(briefingContent2), 0644)
+	fm.HandleFileChange(briefingPath)
+
+	select {
+	case msg := <-hub.broadcast:
+		t.Fatalf("expected no broadcast when briefing only differs by timestamp on line 2, got: %s", string(msg))
+	case <-time.After(50 * time.Millisecond):
+		// Expected: nothing happens (considered unchanged)
+	}
+
+	// Flight data should still be intact and not reset
+	flight := fm.GetCurrentFlight()
+	if flight == nil || flight.Ini != iniContent {
+		t.Fatalf("expected flight data to remain intact when only timestamp changes")
+	}
+}
+
+func TestIsBriefingEqual(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        string
+		b        string
+		expected bool
+	}{
+		{
+			name:     "identical strings",
+			a:        "Header\nTime: 1234\nLine 3\nLine 4",
+			b:        "Header\nTime: 1234\nLine 3\nLine 4",
+			expected: true,
+		},
+		{
+			name:     "different timestamp on line 2",
+			a:        "Header\nGenerated: 2026-01-01 10:00\nLine 3\nLine 4",
+			b:        "Header\nGenerated: 2026-09-03 15:30\nLine 3\nLine 4",
+			expected: true,
+		},
+		{
+			name:     "different timestamp on line 2 with CRLF vs LF",
+			a:        "Header\r\nGenerated: 2026-01-01 10:00\r\nLine 3\r\nLine 4",
+			b:        "Header\nGenerated: 2026-09-03 15:30\nLine 3\nLine 4",
+			expected: true,
+		},
+		{
+			name:     "different line 1 (header)",
+			a:        "Header A\nTime: 1234\nLine 3",
+			b:        "Header B\nTime: 1234\nLine 3",
+			expected: false,
+		},
+		{
+			name:     "different line 3 (content)",
+			a:        "Header\nTime: 1234\nLine 3 A",
+			b:        "Header\nTime: 1234\nLine 3 B",
+			expected: false,
+		},
+		{
+			name:     "different line counts",
+			a:        "Header\nTime: 1234\nLine 3",
+			b:        "Header\nTime: 1234\nLine 3\nLine 4",
+			expected: false,
+		},
+		{
+			name:     "single line identical",
+			a:        "Header only",
+			b:        "Header only",
+			expected: true,
+		},
+		{
+			name:     "single line different",
+			a:        "Header 1",
+			b:        "Header 2",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := isBriefingEqual(tt.a, tt.b)
+			if actual != tt.expected {
+				t.Errorf("isBriefingEqual() = %v, expected %v", actual, tt.expected)
+			}
+		})
 	}
 }
 
