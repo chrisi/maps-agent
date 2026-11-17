@@ -39,8 +39,6 @@ func main() {
 
 	iniPath := filepath.Join(cfg.FalconBase, `User\Config`, cfg.Callsign+".ini")
 	briefingPath := filepath.Join(cfg.FalconBase, `User\Briefings`, "briefing.txt")
-	ws.RegisterIniEndpoint(iniPath)
-	ws.RegisterBriefingEndpoint(briefingPath)
 
 	hub := NewWebsocketHub()
 	go hub.run()

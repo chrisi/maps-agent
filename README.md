@@ -48,3 +48,64 @@ Usage of maps-agent.exe:
 ```
 maps-agent.exe --path="C:\apps\Falcon BMS 4.38" --callsign="Joker" --mission-load="mc-test.cam"
 ```
+
+## Flight data
+
+The agent watches two files that Falcon BMS writes while you plan a flight:
+
+- `User\Config\<callsign>.ini`: the flight configuration (steerpoints, loadout, etc.)
+- `User\Briefings\briefing.txt`: the mission briefing
+
+BMS writes these files at different times, so reading them separately can give you a new INI and an old
+briefing, or the other way round. The agent pairs them first and serves them together from one endpoint.
+
+### Endpoint
+
+`GET /flight` returns the current flight as JSON. If no paired flight is available yet, it returns
+`404`.
+
+```json
+{
+  "callsign": "Joker",
+  "ini": "<content of Joker.ini>",
+  "briefing": "<content of briefing.txt>",
+  "updatedAt": "2026-09-03T12:54:53Z"
+}
+```
+
+When a new flight becomes available, the agent sends this message to all websocket clients:
+
+```json
+{
+  "type": "update",
+  "payload": {
+    "status": "ready",
+    "endpoint": "/flight",
+    "message": "Current mission is ready for download"
+  }
+}
+```
+
+### How INI and briefing are paired
+
+The file watcher debounces changes to each file separately, using `-fs-check-freq`. Once a file has
+stopped changing, it is handled as follows.
+
+**INI saved**
+
+- No briefing yet: store the INI and wait for the briefing.
+- Briefing present: pair the INI with the briefing, update the current flight and send `ready`.
+  This also covers saving the INI again for the same mission.
+
+**Briefing saved**
+
+- First briefing, no INI yet: store the briefing and wait for the INI.
+- First briefing, INI present: pair them, update the current flight and send `ready`.
+- Same as the stored briefing: ignore it. The second line of `briefing.txt` holds the time the
+  briefing was generated, so the comparison skips that line and also ignores line-ending differences.
+  This way, generating the same briefing again does not count as a new mission.
+- Different from the stored briefing: this means a new mission. Store the new briefing, discard the
+  stored INI and the current flight, and wait for the matching INI. `/flight` returns `404` until it
+  arrives.
+
+This means `/flight` only ever returns an INI and a briefing that belong to the same mission.
