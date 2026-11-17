@@ -410,7 +410,7 @@ public:
 };
 
 
-#define FLIGHTDATA2_VERSION 23
+#define FLIGHTDATA2_VERSION 24
 // Changelog:
 // 1: initial BMS 4.33 version
 // 2: added AltCalReading, altBits, uhf_panel_preset, powerBits, blinkBits, cmdsMode
@@ -435,6 +435,7 @@ public:
 // 21: added TACAN ILS.
 // 22: added desired/configures RTT export FPS
 // 23: added Gs min/max
+// 24: added Sun position
 
 
 // do NOT change these w/o crosschecking the BMS code; also be aware that a change here is a BREAKING CHANGE in shared mem
@@ -520,7 +521,7 @@ public:
     enum NavModes : unsigned char
     {
         ILS_TACAN   = 0,
-        TACAN       = 1, 
+        TACAN       = 1,
         NAV         = 2,
         ILS_NAV     = 3,
     };
@@ -596,7 +597,7 @@ public:
     enum MiscBits : unsigned int
     {
         RALT_Valid          = 0x01, // indicates weather the RALT reading is valid/reliable
-        
+
         // VERSION 17
         Flcs_Flcc_A         = 0x02,
         Flcs_Flcc_B         = 0x04,
@@ -715,7 +716,7 @@ public:
     unsigned int StringAreaSize; // the overall size of the StringData/FalconSharedMemoryAreaString area
     unsigned int StringAreaTime; // last time the StringData/FalconSharedMemoryAreaString area has been changed - you only need to re-read the string shared mem if this changes
     unsigned int DrawingAreaSize;// the overall size of the DrawingData/FalconSharedMemoryAreaDrawing area
-    
+
     // VERSION 16
     float turnRate;              // actual turn rate (no delay or dampening) in degrees/second
 
@@ -748,12 +749,16 @@ public:
 	// VERSION 22
 	int desired_RTT_FPS;     // The configured RTT export FPS value, g_nRTTExport_FPS
 
-    // SIDE SLIP ANGLE 
-    float sideSlipdeg; // ADI side Slip 
+    // SIDE SLIP ANGLE
+    float sideSlipdeg; // ADI side Slip
 
     // VERSION 23
     float gsMax;       // Ownship Max Gs
     float gsMin;       // Ownship Min Gs
+
+    // VERSION 24
+    float sunAzimuth;  // Sun azimuth in radians (0 to 2*PI)
+    float sunElevation; // Sun elevation in radians (-PI/2 to +PI/2)
 
     // TACAN
     // setters for internal use only
@@ -769,7 +774,7 @@ public:
     bool AuxTacanIsX(void)  const { return ((tacanInfo[AUX] & band) ? true : false); }
 
     //setters/Clear are for BMS-internal use only; external reader programs can only use getters/IsSet
-    
+
     // ALTIMETER
     void SetAltBit(AltBits newBit) { altBits |= newBit; };
     void ClearAltBit(AltBits newBit) { altBits &= ~newBit; };
@@ -892,30 +897,30 @@ public:
         // VERSION 5
         VoiceHelpers,            // A comma separated list of tokens that represent flight and agency names used in AI radio comms
                                  // The format of the string is a single line laid out as follows:
-                                 // 
+                                 //
                                  //     <player>|<seats>,<tanker>,<awacs>,<departure>,<arrival>,<alternate>
-                                 // 
+                                 //
                                  // where:
-                                 // 
+                                 //
                                  //     <player> represents the local player's ownship flight name, "Goblin1" for example
-                                 // 
+                                 //
                                  //     '|' is a literal pipe symbol character as a separator between the <player> and <seats> tokens
-                                 // 
+                                 //
                                  //     <seats> is a 4-character token representing the occupancy of the 4 slots in a flight wherein:
                                  //         'P' is for the local session player
                                  //         'H' is for any other human player
                                  //         'A' is for an AI piloted jet
                                  //         'X' is for a slot in the flight that has no jet
-                                 // 
-                                 //     for example as <seats> token of "HPXX" would represent a multi-player mission 2-ship with the local 
+                                 //
+                                 //     for example as <seats> token of "HPXX" would represent a multi-player mission 2-ship with the local
                                  //     player flying in the #2 slot.
-                                 // 
+                                 //
                                  //     <tanker> is the callsign of any assigned tanker flight or "None" if there isn't one assigned in the
                                  //     ATO. For example "Texaco7".
-                                 // 
+                                 //
                                  //     <awacs> is the callsign of any assign Air Battle Manager or Weapons Director agency (normally AWACS)
                                  //     assigned to the flight or "None" if there is no such support flight.  Example might be "Chalice9".
-                                 // 
+                                 //
                                  //     <departure>, <arrival> and <alternate> are respectively the names of the landing sites for the flights
                                  //     takeoff, planned landing and alternate landing sites.  For example you might see "Osan,Osan,Pyeongtaek"
                                  //     for a flight that plans a round trip to/from Osan with the other named airbase as the alternate.
@@ -993,9 +998,9 @@ public:
 //
 //         Common data format for 2D drawing command strings:
 //         Command strings consist of a symbol indicating the command type, followed by a colon, followed by a comma-delimited list of arguments for that commmand, all followed by a terminating semicolon. e.g;
-//               COMMAND: arg1, arg2, ..., argN;  
+//               COMMAND: arg1, arg2, ..., argN;
 //
-//         The following table lists all the available commands and their arguments. 
+//         The following table lists all the available commands and their arguments.
 //
 //           Command       Arguments          Type              Description
 //         -------       ---------          ---------        -------------------------------------------------------------------
@@ -1003,20 +1008,20 @@ public:
 //                       width,               int                canvas width
 //                       height;              int                canvas height
 //
-//            F:                                               Set font            
+//            F:                                               Set font
 //                       "fontFile";          string              font texture file
 //
-//            P:                                               Draw point           
+//            P:                                               Draw point
 //                       x,                   float               X coordinate
 //                       y;                   float               Y coordinate
 //
-//            L:                                               Draw line           
+//            L:                                               Draw line
 //                       x1,                  float               starting X coordinate
 //                       y1,                  float               starting Y coordinate
 //                       x2,                  float               ending X coordinate
 //                       y2;                  float               ending Y coordinate
 //
-//            T:                                               Draw filled triangle           
+//            T:                                               Draw filled triangle
 //                       x1,                  float               vertex 1 X coordinate
 //                       y1,                  float               vertex 1 Y coordinate
 //                       x2,                  float               vertex 2 X coordinate
@@ -1025,14 +1030,14 @@ public:
 //                       y3;                  float               vertex 3 Y coordinate
 //
 //            S:                                               Draw string
-//                       xLeft,               float               X coordinate 
-//                       yTop,                float               Y coordinate 
+//                       xLeft,               float               X coordinate
+//                       yTop,                float               Y coordinate
 //                       "textString",        string              string to draw
 //                       invert;              unsigned char       0=draw text normally; 1=draw text inverted
 //
 //            SR:                                               Draw string with rotated text
 //                       xLeft,               float               X coordinate
-//                       yTop,                float               Y coordinate 
+//                       yTop,                float               Y coordinate
 //                       "textString",        string              string to draw
 //                       angle;               float               rotation angle (radians)
 //

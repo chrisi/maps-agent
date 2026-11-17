@@ -15,6 +15,47 @@ Download the source, goto the main project directory and execute the following c
 go build -o c:\apps\maps-agent.exe maps-agent
 ```
 
+The agent is pure Go (no cgo), so no C compiler is needed.
+
+### Cross-compile on Linux (e.g. to run it in Wine/Proton next to Falcon BMS)
+
+```
+make            # builds bin/maps-agent.exe
+```
+
+or without make: `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o maps-agent.exe .`
+Other targets: `make test`, `make vet`, `make layout` (after updating `FlightData.h`), `make clean`.
+
+The result is a static binary that only uses standard Windows system DLLs, which Wine provides.
+
+To read the shared memory, the agent has to run in the **same Wine prefix** and with the **same
+Wine/Proton build** as Falcon BMS. Named shared memory only exists inside the wineserver of a
+prefix; a different prefix or Wine version starts its own wineserver and won't find it. For example:
+
+```
+# plain Wine / Lutris
+WINEPREFIX=/path/to/bms-prefix /path/to/the/same/wine maps-agent.exe --shared-mem ...
+
+# Proton (BMS added to Steam as a non-Steam game)
+protontricks-launch --appid <appid> maps-agent.exe --shared-mem ...
+```
+
+### Fallback: build with cgo and MinGW
+
+Older versions of the agent read the BMS structs through cgo. If cgo is ever needed again, a cgo
+build for Windows needs a Windows C toolchain, because cross-compiling disables cgo by default.
+On Linux, install MinGW-w64 (e.g. `apt install gcc-mingw-w64-x86-64`) and run:
+
+```
+CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+  go build -ldflags '-extldflags "-static"' -o maps-agent.exe .
+```
+
+`-extldflags "-static"` links the MinGW runtime (`libgcc`, `libwinpthread`) into the exe, so no
+extra MinGW DLLs need to be next to it in Wine. Check with
+`x86_64-w64-mingw32-objdump -p maps-agent.exe | grep 'DLL Name'`; only Windows system DLLs should be
+listed.
+
 ## Usage
 
 ```
@@ -109,3 +150,28 @@ stopped changing, it is handled as follows.
   arrives.
 
 This means `/flight` only ever returns an INI and a briefing that belong to the same mission.
+
+## Falcon BMS shared memory
+
+The package `bms` reads the shared memory areas of Falcon BMS (enabled with `-shared-mem`):
+
+| Area                            | Go type           | Content                                            |
+|---------------------------------|-------------------|----------------------------------------------------|
+| `FalconSharedMemoryArea`        | `bms.FlightData`  | position, flight values, lamps, DED/PFL, RWR, ...  |
+| `FalconSharedMemoryArea2`       | `bms.FlightData2` | second engine, altimeter, MP pilots, lat/lon, ...  |
+| `FalconSharedOsbMemoryArea`     | `bms.OSBData`     | MFD button labels                                  |
+| `FalconSharedMemoryAreaString`  | `bms.StringData`  | BMS/theater directories, aircraft, nav points, ... |
+| `FalconSharedMemoryAreaDrawing` | `bms.DrawingData` | HUD/RWR/HMS drawing commands                       |
+
+The Go structs mirror the C++ classes in `include/FlightData.h` byte by byte. Every getter returns
+a copy, so the data can't change while you're using it. If an older BMS version provides a shorter
+area, the fields it doesn't have stay zero.
+
+### Updating to a new FlightData.h
+
+1. Replace `include/FlightData.h` with the new version from Falcon BMS.
+2. Regenerate the reference layout (needs `g++`): `python3 bms/testdata/gen_layout.py`
+3. Run `go test ./bms`. The test compares every field's name, offset and size, and the total struct
+   size, with the header and reports any differences.
+4. Add or adjust the fields in `bms/flightdata.go` / `bms/flightdata2.go` until the test passes, and
+   update the bit constants and version numbers.

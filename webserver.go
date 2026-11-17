@@ -94,13 +94,37 @@ func (w *Webserver) RegisterMissionResourceEndpoints(manager *camtac.MissionMana
 }
 
 func (w *Webserver) RegisterSharedMemoryEndpoint(smr *SharedMemReader) {
-	w.logger.Infof("Registering aircraft position endpoint")
+	w.logger.Infof("Registering shared memory endpoints: /pos, /fuel/flow, /fuel/state")
 	if smr != nil {
 		w.r.GET("/pos", func(c *gin.Context) {
 			read := smr.GetOwnShip()
 			c.JSON(http.StatusOK, read)
 		})
+
+		// Fuel flow in lbs/hour.
+		w.r.GET("/fuel/flow", func(c *gin.Context) {
+			flow := smr.GetFuelFlow()
+			if flow < 0 {
+				sharedMemUnavailable(c)
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"fuelFlow": flow})
+		})
+
+		// Total fuel in lbs.
+		w.r.GET("/fuel/state", func(c *gin.Context) {
+			state := smr.GetFuelState()
+			if state < 0 {
+				sharedMemUnavailable(c)
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"fuelState": state})
+		})
 	}
+}
+
+func sharedMemUnavailable(c *gin.Context) {
+	c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Falcon BMS shared memory not available"})
 }
 
 func (w *Webserver) RegisterWebsocketEndpoint(hub *WebsocketHub) {
