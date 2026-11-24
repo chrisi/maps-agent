@@ -13,6 +13,7 @@ import (
 type MissionManager struct {
 	logger          *util.Logger
 	falconBase      string
+	campaignBase    string
 	deltaReader     *ObjectiveDeltaReader
 	objectiveReader *ObjectiveReader
 	campaignReader  *CampaignReader
@@ -43,11 +44,11 @@ const (
 func (m *MissionManager) ReadMission(theater Theater, missionFilename string) {
 	m.logger.Infof("Reading mission %s", missionFilename)
 
-	campaignBase := m.falconBase + "/Data" + string(theater) + "/Campaign"
+	m.campaignBase = m.falconBase + "/Data" + string(theater) + "/Campaign"
 
 	m.loadClassTable()
 	m.initializeReaders()
-	missionBundle := m.loadBundle(campaignBase + "/" + missionFilename)
+	missionBundle := m.loadBundle(m.campaignBase + "/" + missionFilename)
 
 	deltaData, err := missionBundle.GetEmbeddedFileContentsByType(ObjectiveDeltaType)
 	if err != nil {
@@ -64,20 +65,20 @@ func (m *MissionManager) ReadMission(theater Theater, missionFilename string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	unitData, err := missionBundle.GetEmbeddedFileContentsByType(UnitType)
-	if err != nil {
-		log.Fatal(err)
-	}
-	m.units = m.unitReader.ReadUniFile(unitData)
-	unitCounts := m.unitReader.Counts()
-	m.logger.Infof("Flights %d, Packages %d, Squadrons %d, Battalions %d, Brigades %d, Task-Forces %d, Overall %d",
-		unitCounts.NumFlights, unitCounts.NumPackages, unitCounts.NumSquadrons,
-		unitCounts.NumBattalions, unitCounts.NumBrigades, unitCounts.NumTaskForces, unitCounts.NumUnits)
-
+	/*
+		unitData, err := missionBundle.GetEmbeddedFileContentsByType(UnitType)
+		if err != nil {
+			log.Fatal(err)
+		}
+		m.units = m.unitReader.ReadUniFile(unitData)
+		unitCounts := m.unitReader.Counts()
+		m.logger.Infof("Flights %d, Packages %d, Squadrons %d, Battalions %d, Brigades %d, Task-Forces %d, Overall %d",
+			unitCounts.NumFlights, unitCounts.NumPackages, unitCounts.NumSquadrons,
+			unitCounts.NumBattalions, unitCounts.NumBrigades, unitCounts.NumTaskForces, unitCounts.NumUnits)
+	*/
 	baseMission := m.campaign.Scenario + filepath.Ext(missionFilename)
 	m.logger.Infof("Base Mission: %s", baseMission)
-	objectiveBundle := m.loadBundle(campaignBase + "/" + baseMission)
+	objectiveBundle := m.loadBundle(m.campaignBase + "/" + baseMission)
 	objectiveData, err := objectiveBundle.GetEmbeddedFileContentsByType(ObjectiveType)
 	if err != nil {
 		log.Fatal(err)
